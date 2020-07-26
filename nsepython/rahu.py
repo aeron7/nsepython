@@ -1,4 +1,3 @@
-import pickle
 import requests
 import pandas as pd
 import json
@@ -42,7 +41,6 @@ def nse_optionchain_scrapper(symbol):
         payload = requests.get('https://www.nseindia.com/api/option-chain-equities?symbol='+symbol.replace('&','%26'),headers=headers).json()
     return payload
 
-
 def oi_data_builder():
     oi_data = pd.DataFrame()
     symbols=fnolist()
@@ -51,12 +49,6 @@ def oi_data_builder():
         #if(i>4):break #Tester
         logging.info("Fetching: "+symbol)
         payload = nse_optionchain_scrapper(symbol)
-        with open('oi_data/'+symbol+'.pickle', 'wb') as handle:
-          pickle.dump(payload, handle)
-
-        #Mode 2
-        with open('oi_data/'+symbol+'.pickle', 'rb') as handle:
-          payload = pickle.loads(handle.read())
 
         m=0
         for m in range(len(payload['records']['data'])):
@@ -74,23 +66,11 @@ def oi_data_builder():
             except:
                 logging.info(m)
 
-    oi_data.to_pickle('oi_data/main.pickle')
-
     return oi_data
 
-def oi_chain_builder (symbol,expiry="latest",oi_mode="full",mode="fetch"):
+def oi_chain_builder (symbol,expiry="latest",oi_mode="full"):
 
-    if(mode=="fetch"):
-        #Mode 1
-        logging.info("Fetching: "+symbol)
-        payload = nse_optionchain_scrapper(symbol)
-        with open('oi_data/'+symbol+'.pickle', 'wb') as handle:
-          pickle.dump(payload, handle)
-
-    if(mode=="local"):
-        #Mode 2
-        with open('oi_data/'+symbol+'.pickle', 'rb') as handle:
-          payload = pickle.loads(handle.read())
+    payload = nse_optionchain_scrapper(symbol)
 
     if(oi_mode=='compact'):
         col_names = ['CALLS_OI','CALLS_Chng in OI','CALLS_Volume','CALLS_IV','CALLS_LTP','CALLS_Net Chng','Strike Price','PUTS_OI','PUTS_Chng in OI','PUTS_Volume','PUTS_IV','PUTS_LTP','PUTS_Net Chng']
@@ -108,8 +88,8 @@ def oi_chain_builder (symbol,expiry="latest",oi_mode="full",mode="fetch"):
         if(payload['records']['data'][m]['expiryDate']==expiry):
             if(1>0):
                 try:
-                    oi_row['CALLS_OI']=payload['records']['data'][m]['CE']['openInterest']*20
-                    oi_row['CALLS_Chng in OI']=payload['records']['data'][m]['CE']['changeinOpenInterest']*20
+                    oi_row['CALLS_OI']=payload['records']['data'][m]['CE']['openInterest'] #Minor Issue; Fixed - Thanks to Adithya_K
+                    oi_row['CALLS_Chng in OI']=payload['records']['data'][m]['CE']['changeinOpenInterest']
                     oi_row['CALLS_Volume']=payload['records']['data'][m]['CE']['totalTradedVolume']
                     oi_row['CALLS_IV']=payload['records']['data'][m]['CE']['impliedVolatility']
                     oi_row['CALLS_LTP']=payload['records']['data'][m]['CE']['lastPrice']
@@ -128,8 +108,8 @@ def oi_chain_builder (symbol,expiry="latest",oi_mode="full",mode="fetch"):
                 oi_row['Strike Price']=payload['records']['data'][m]['strikePrice']
 
                 try:
-                    oi_row['PUTS_OI']=payload['records']['data'][m]['PE']['openInterest']*20
-                    oi_row['PUTS_Chng in OI']=payload['records']['data'][m]['PE']['changeinOpenInterest']*20
+                    oi_row['PUTS_OI']=payload['records']['data'][m]['PE']['openInterest']
+                    oi_row['PUTS_Chng in OI']=payload['records']['data'][m]['PE']['changeinOpenInterest']
                     oi_row['PUTS_Volume']=payload['records']['data'][m]['PE']['totalTradedVolume']
                     oi_row['PUTS_IV']=payload['records']['data'][m]['PE']['impliedVolatility']
                     oi_row['PUTS_LTP']=payload['records']['data'][m]['PE']['lastPrice']
@@ -151,3 +131,77 @@ def oi_chain_builder (symbol,expiry="latest",oi_mode="full",mode="fetch"):
             oi_data = oi_data.append(oi_row, ignore_index=True)
 
     return oi_data,float(payload['records']['underlyingValue']),payload['records']['timestamp']
+
+def get_atm_strike(symbol): #Thanks to Ronit_Hain and Ankit Jain
+    payload = nse_optionchain_scrapper(symbol.upper())
+    ltp = float(payload['records']['underlyingValue'])
+    strike_price_list = [x['strikePrice'] for x in payload['records']['data']]
+    atm_strike = sorted([[round(abs(ltp-i),2),i] for i in strike_price_list])[0][1]
+    return atm_strike
+
+def running_status(): #It will give true if market is running and false if market is not running.
+    start_now=datetime.datetime.now().replace(hour=9, minute=15, second=0, microsecond=0)
+    end_now=datetime.datetime.now().replace(hour=15, minute=45, second=0, microsecond=0)
+    return start_now<datetime.datetime.now()<end_now
+
+def nse_eq(symbol):
+    try:
+        payload = requests.get('https://www.nseindia.com/api/quote-equity?symbol='+symbol.replace('&','%26'),headers=headers).json()
+        try:
+            if(payload['error']=={}):
+                print("Please use nse_fno() function to reduce latency.")
+                payload = requests.get('https://www.nseindia.com/api/quote-derivative?symbol='+symbol.replace('&','%26'),headers=headers).json()
+        except:
+            pass
+    except KeyError:
+        print("Getting Error While Fetching.")
+    return payload
+
+
+def nse_fno(symbol):
+    try:
+        payload = requests.get('https://www.nseindia.com/api/quote-derivative?symbol='+symbol.replace('&','%26'),headers=headers).json()
+        try:
+            if(payload['error']=={}):
+                print("Please use nse_eq() function to reduce latency.")
+                payload = requests.get('https://www.nseindia.com/api/quote-equity?symbol='+symbol.replace('&','%26'),headers=headers).json()
+        except KeyError:
+            pass
+    except KeyError:
+        print("Getting Error While Fetching.")
+    return payload
+
+def quote_equity(symbol):
+    return nse_eq(symbol)
+
+def quote_derivative(symbol):
+    return nse_fno(symbol)
+
+def option_chain(symbol):
+    return nse_optionchain_scrapper(symbol)
+
+def nse_holidays(type="trading"):
+    if(type=="clearing"):
+        payload = requests.get('https://www.nseindia.com/api/holiday-master?type=clearing',headers=headers).json()
+    if(type=="trading"):
+        payload = requests.get('https://www.nseindia.com/api/holiday-master?type=trading',headers=headers).json()
+    return payload
+
+def holiday_master(type="trading"):
+    return nse_holidays(type)
+
+def nse_results(index="equities",period="Quarterly"):
+    if(index=="equities") or (index=="debt") or (index=="sme"):
+        if(period=="Quarterly") or (period=="Annual")or (period=="Half-Yearly")or (period=="Others"):
+            payload = requests.get('https://www.nseindia.com/api/corporates-financial-results?index='+index+'&period='+period,headers=headers).json()
+            return pd.json_normalize(payload)
+        else:
+            print("Give Correct Period Input")
+    else:
+        print("Give Correct Index Input")
+
+def nse_events():
+    return pd.json_normalize(requests.get('https://www.nseindia.com/api/event-calendar',headers=headers).json())
+
+def nse_past_results(symbol):
+    return requests.get('https://www.nseindia.com/api/results-comparision?symbol='+symbol.replace('&','%26'),headers=headers).json()
