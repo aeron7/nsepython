@@ -13,7 +13,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",  author = 'Aeron7',
     author_email = 'hello@aeron7.com',
     url = 'https://github.com/aeron7/nsepython',
-    install_requires=['requests', 'pandas'],
+    install_requires=['requests', 'pandas', 'matplotlib'],
     keywords = ['nseindia', 'nse', 'python', 'sdk', 'trading', 'stock markets'],
     classifiers=[
       'Intended Audience :: Developers',
