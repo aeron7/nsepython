@@ -5,6 +5,8 @@ import random
 import datetime,time
 import logging
 
+import matplotlib.pyplot as plt
+
 #logging.basicConfig(level=logging.DEBUG)
 
 # pd.set_option('display.max_columns', None)  # or 1000
@@ -205,3 +207,73 @@ def nse_events():
 
 def nse_past_results(symbol):
     return requests.get('https://www.nseindia.com/api/results-comparision?symbol='+symbol.replace('&','%26'),headers=headers).json()
+
+def highest_call_oi(oi_data):
+    idx = oi_data["CALLS_OI"].idxmax()
+    return oi_data["Strike Price"][idx]
+
+def highest_put_oi(oi_data):
+    idx = oi_data["PUTS_OI"].idxmax()
+    return oi_data["Strike Price"][idx]
+
+def highest_call_oi_change(oi_data):
+    idx = oi_data["CALLS_Chng in OI"].idxmax()
+    return oi_data["Strike Price"][idx]
+
+def highest_put_oi_change(oi_data):
+    idx = oi_data["PUTS_Chng in OI"].idxmax()
+    return oi_data["Strike Price"][idx]
+
+def second_highest_call_oi(oi_data):
+    sorted_args = oi_data["CALLS_OI"].argsort()
+    idx = sorted_args[len(sorted_args)-2]
+    return oi_data["Strike Price"][idx]
+
+def second_highest_put_oi(oi_data):
+    sorted_args = oi_data["PUTS_OI"].argsort()
+    idx = sorted_args[len(sorted_args)-2]
+    return oi_data["Strike Price"][idx]
+
+def call_oi(oi_data):
+    return oi_data["CALLS_OI"].sum()
+
+def put_oi(oi_data):
+    return oi_data["PUTS_OI"].sum()
+
+def call_oi_change(oi_data):
+    return oi_data["CALLS_Chng in OI"].sum()
+
+def put_oi_change(oi_data):
+    return oi_data["PUTS_Chng in OI"].sum()
+
+def pcr(oi_data):
+    call_oi_val = call_oi(oi_data)
+    if call_oi_val>0:
+        return round(1.0*put_oi(oi_data)/call_oi_val, 2)
+    else:
+        return -1
+
+def change_pcr(oi_data):
+    call_oi_prev = call_oi(oi_data) - call_oi_change(oi_data)
+    put_oi_prev = put_oi(oi_data) - put_oi_change(oi_data)
+    pcr_val = pcr(oi_data)
+    if pcr_val!=-1 and call_oi_prev!=0:
+        return round(pcr_val - 1.0*put_oi_prev/call_oi_prev, 2)
+    else:
+        return -1
+
+def get_iv(oi_data, symbol):
+    atm = get_atm_strike(symbol)
+    idx = oi_data["Strike Price"][oi_data["Strike Price"]==atm].index[0]
+    return round((oi_data["CALLS_IV"][idx] + oi_data["PUTS_IV"][idx])/2, 2)
+
+def oi_graph(oi_data):
+    figure, axes = plt.subplots(nrows=2, ncols=1)
+    offset = 1.0*(oi_data["Strike Price"][1]-oi_data["Strike Price"][0])/5
+    axes[0].bar(oi_data["Strike Price"]-offset, oi_data["CALLS_OI"], width=2*offset, color='b', align='center')
+    axes[0].bar(oi_data["Strike Price"]+offset, oi_data["PUTS_OI"], width=2*offset, color='r', align='center')
+    axes[0].set_title("OI graph")
+    axes[1].bar(oi_data["Strike Price"]-offset, oi_data["CALLS_Chng in OI"], width=2*offset, color='b', align='center')
+    axes[1].bar(oi_data["Strike Price"]+offset, oi_data["PUTS_Chng in OI"], width=2*offset, color='r', align='center')
+    axes[1].set_title("OI change graph")
+    plt.show()
