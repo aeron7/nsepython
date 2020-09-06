@@ -1,0 +1,50 @@
+Metadata-Version: 2.1
+Name: nsepython
+Version: 0.0.82
+Summary: Python library for NSE India APIs
+Home-page: https://github.com/aeron7/nsepython
+Author: Aeron7
+Author-email: hello@aeron7.com
+License: UNKNOWN
+Description: # NSEPython
+        
+        NSEPython is a Python library for dealing with [NSEIndia](nseindia.com) APIs.
+        
+        ## Installation
+        
+        Use the package manager [pip](https://pypi.org/project/nsepython/) to install nsepython.
+        
+        ```bash
+        pip install nsepython
+        ```
+        ## Documentation
+        
+        - Fetch All Indices.
+        - Fetch List of All FNO Stocks.
+        - Fetch Option Chain Data.
+        - An Advanced OI Chain Visualizer Function.
+        - Getting ATM Strikes.
+        - Stocks and Derivatives API Fetch Live Stock and Derivatives Prices and all detailed data.
+        - Holiday API
+        - Event Calendar API
+        - Results API
+        - Past Results API
+        
+        For Full Documentation and Sample Code, Refer - https://forum.unofficed.com/t/nsepython-documentation/376
+        
+        ## Contributing
+        For Discussion and Improving this Code, Join - https://www.unofficed.com/chat/
+        
+        ## License
+        [MIT](https://choosealicense.com/licenses/mit/)
+        
+Keywords: nseindia,nse,python,sdk,trading,stock markets
+Platform: UNKNOWN
+Classifier: Intended Audience :: Developers
+Classifier: Natural Language :: English
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: Implementation :: PyPy
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Description-Content-Type: text/markdown

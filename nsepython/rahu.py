@@ -1,45 +1,87 @@
+import os,sys
+# os.chdir(os.path.dirname(os.path.abspath(__file__)))
+# sys.path.insert(1, os.path.join(sys.path[0], '..'))
+
 import requests
 import pandas as pd
 import json
+
 import random
 import datetime,time
 import logging
-
-#logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
 
 # pd.set_option('display.max_columns', None)  # or 1000
 # pd.set_option('display.max_rows', None)  # or 1000
 # pd.set_option('display.max_colwidth', -1)  # or 199
-pd.options.mode.chained_assignment = None  # default='warn' https://stackoverflow.com/questions/20625582/how-to-deal-with-settingwithcopywarning-in-pandas
+# pd.options.mode.chained_assignment = None  # default='warn' https://stackoverflow.com/questions/20625582/how-to-deal-with-settingwithcopywarning-in-pandas
 
-headers = {
-    'Connection': 'keep-alive',
-    'Cache-Control': 'max-age=0',
-    'DNT': '1',
-    'Upgrade-Insecure-Requests': '1',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.79 Safari/537.36',
-    'Sec-Fetch-User': '?1',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-    'Sec-Fetch-Site': 'none',
-    'Sec-Fetch-Mode': 'navigate',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
-}
+mode ='local'
+
+if(mode=='local'):
+
+    headers = {
+        'Connection': 'keep-alive',
+        'Cache-Control': 'max-age=0',
+        'DNT': '1',
+        'Upgrade-Insecure-Requests': '1',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.79 Safari/537.36',
+        'Sec-Fetch-User': '?1',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-Mode': 'navigate',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
+    }
+
+    def nsefetch(payload):
+        try:
+            output = requests.get(payload,headers=headers).json()
+            print(output)
+        except ValueError:
+            s =requests.Session()
+            output = s.get("http://nseindia.com",headers=headers)
+            output = s.get(payload,headers=headers).json()
+        return output
+
+run_time=datetime.datetime.now()
 
 #Constants
 indices = ['NIFTY','NIFTYIT','BANKNIFTY']
 
+def running_status():
+    start_now=datetime.datetime.now().replace(hour=9, minute=15, second=0, microsecond=0)
+    end_now=datetime.datetime.now().replace(hour=15, minute=45, second=0, microsecond=0)
+    return start_now<datetime.datetime.now()<end_now
+
+
 #Getting FNO Symboles
 def fnolist():
-    df = pd.read_csv("https://www1.nseindia.com/content/fo/fo_mktlots.csv")
-    return [x.strip(' ') for x in df.drop(df.index[3]).iloc[:,1].to_list()]
+    # df = pd.read_csv("https://www1.nseindia.com/content/fo/fo_mktlots.csv")
+    # return [x.strip(' ') for x in df.drop(df.index[3]).iloc[:,1].to_list()]
+
+    positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
+
+    nselist=['NIFTY','NIFTYIT','BANKNIFTY']
+
+    i=0
+    for x in range(i, len(positions['data'])):
+        nselist=nselist+[positions['data'][x]['symbol']]
+
+    return nselist
+
+def nsesymbolpurify(symbol):
+    symbol = symbol.replace('&','%26') #URL Parse for Stocks Like M&M Finance
+    return symbol
 
 def nse_optionchain_scrapper(symbol):
+    symbol = nsesymbolpurify(symbol)
     if any(x in symbol for x in indices):
-        payload = requests.get('https://www.nseindia.com/api/option-chain-indices?symbol='+symbol.replace('&','%26'),headers=headers).json()
+        payload = nsefetch('https://www.nseindia.com/api/option-chain-indices?symbol='+symbol)
     else:
-        payload = requests.get('https://www.nseindia.com/api/option-chain-equities?symbol='+symbol.replace('&','%26'),headers=headers).json()
+        payload = nsefetch('https://www.nseindia.com/api/option-chain-equities?symbol='+symbol)
     return payload
+
 
 def oi_data_builder():
     oi_data = pd.DataFrame()
@@ -80,7 +122,6 @@ def oi_chain_builder (symbol,expiry="latest",oi_mode="full"):
 
     #oi_row = {'CALLS_OI':0, 'CALLS_Chng in OI':0, 'CALLS_Volume':0, 'CALLS_IV':0, 'CALLS_LTP':0, 'CALLS_Net Chng':0, 'Strike Price':0, 'PUTS_OI':0, 'PUTS_Chng in OI':0, 'PUTS_Volume':0, 'PUTS_IV':0, 'PUTS_LTP':0, 'PUTS_Net Chng':0}
     oi_row = {'CALLS_OI':0, 'CALLS_Chng in OI':0, 'CALLS_Volume':0, 'CALLS_IV':0, 'CALLS_LTP':0, 'CALLS_Net Chng':0, 'CALLS_Bid Qty':0,'CALLS_Bid Price':0,'CALLS_Ask Price':0,'CALLS_Ask Qty':0,'Strike Price':0, 'PUTS_OI':0, 'PUTS_Chng in OI':0, 'PUTS_Volume':0, 'PUTS_IV':0, 'PUTS_LTP':0, 'PUTS_Net Chng':0,'PUTS_Bid Qty':0,'PUTS_Bid Price':0,'PUTS_Ask Price':0,'PUTS_Ask Qty':0}
-
     if(expiry=="latest"):
         expiry = payload['records']['expiryDates'][0]
     m=0
@@ -88,7 +129,7 @@ def oi_chain_builder (symbol,expiry="latest",oi_mode="full"):
         if(payload['records']['data'][m]['expiryDate']==expiry):
             if(1>0):
                 try:
-                    oi_row['CALLS_OI']=payload['records']['data'][m]['CE']['openInterest'] #Minor Issue; Fixed - Thanks to Adithya_K
+                    oi_row['CALLS_OI']=payload['records']['data'][m]['CE']['openInterest']
                     oi_row['CALLS_Chng in OI']=payload['records']['data'][m]['CE']['changeinOpenInterest']
                     oi_row['CALLS_Volume']=payload['records']['data'][m]['CE']['totalTradedVolume']
                     oi_row['CALLS_IV']=payload['records']['data'][m]['CE']['impliedVolatility']
@@ -132,25 +173,93 @@ def oi_chain_builder (symbol,expiry="latest",oi_mode="full"):
 
     return oi_data,float(payload['records']['underlyingValue']),payload['records']['timestamp']
 
-def get_atm_strike(symbol): #Thanks to Ronit_Hain and Ankit Jain
-    payload = nse_optionchain_scrapper(symbol.upper())
-    ltp = float(payload['records']['underlyingValue'])
-    strike_price_list = [x['strikePrice'] for x in payload['records']['data']]
-    atm_strike = sorted([[round(abs(ltp-i),2),i] for i in strike_price_list])[0][1]
-    return atm_strike
 
-def running_status(): #It will give true if market is running and false if market is not running.
-    start_now=datetime.datetime.now().replace(hour=9, minute=15, second=0, microsecond=0)
-    end_now=datetime.datetime.now().replace(hour=15, minute=45, second=0, microsecond=0)
-    return start_now<datetime.datetime.now()<end_now
+def nse_quote(symbol):
+    symbol = nsesymbolpurify(symbol)
+
+    if any(x in symbol for x in fnolist()):
+        payload = nsefetch('https://www.nseindia.com/api/quote-derivative?symbol='+symbol)
+    else:
+        payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol)
+    return payload
+
+def nse_expirydetails(payload,i='0'):
+    currentExpiry = payload['records']['expiryDates'][i]
+    currentExpiry = datetime.datetime.strptime(currentExpiry,'%d-%b-%Y').date()  # converting json datetime to alice datetime
+    date_today = run_time.strftime('%Y-%m-%d')  # required to remove hh:mm:ss
+    date_today = datetime.datetime.strptime(date_today,'%Y-%m-%d').date()
+    dte = (currentExpiry - date_today).days
+    return currentExpiry,dte
+
+def pcr(payload,inp='0'):
+    ce_oi = 0
+    pe_oi = 0
+    for i in payload['records']['data']:
+        if i['expiryDate'] == payload['records']['expiryDates'][inp]:
+            try:
+                ce_oi += i['CE']['openInterest']
+                pe_oi += i['PE']['openInterest']
+            except KeyError:
+                pass
+    return pe_oi / ce_oi
+
+def nse_quote_ltp(symbol,expiryDate="latest",optionType="-",strikePrice=0):
+  payload = nse_quote(symbol)
+  #https://stackoverflow.com/questions/7961363/removing-duplicates-in-lists
+  #https://stackoverflow.com/questions/19199984/sort-a-list-in-python
+  if(expiryDate=="latest") or (expiryDate=="next"):
+    if(optionType!="Fut"):
+      dates=list(set((payload["expiryDates"])))
+      dates.sort(key = lambda date: datetime.datetime.strptime(date, '%d-%b-%Y'))
+      expiryDate=dates[0]
+      if(expiryDate=="next"):expiryDate=dates[1]
+
+  meta = "Options"
+  if(optionType=="Fut"): meta = "Futures"
+  if(optionType=="PE"):optionType="Put"
+  if(optionType=="CE"):optionType="Call"
+
+  if(optionType!="-"):
+      for i in payload['stocks']:
+        if meta in i['metadata']['instrumentType']:
+          #print(i['metadata'])
+          if(expiryDate=="latest"):
+            lastPrice = i['metadata']['lastPrice']
+            break
+
+          if (i['metadata']["expiryDate"]==expiryDate):
+            if (i['metadata']["optionType"]==optionType):
+              if (i['metadata']["strikePrice"]==strikePrice):
+                #print(i['metadata'])
+                lastPrice = i['metadata']['lastPrice']
+
+  if(optionType=="-"):
+      lastPrice = payload['underlyingValue']
+
+  return lastPrice
+
+  # print(nse_quote_ltp("BANKNIFTY"))
+  # print(nse_quote_ltp("RELIANCE","latest","Fut"))
+  # print(nse_quote_ltp("RELIANCE"))
+  # print(nse_quote_ltp("BANKNIFTY","13-Aug-2020","PE",21000))
+  # print(nse_quote_ltp("RELIANCE","latest","PE",2300))
+
+def nse_optionchain_ltp(payload,strikePrice,optionType,inp=0,intent=""):
+    expiryDate=payload['records']['expiryDates'][inp]
+    for x in range(len(payload['records']['data'])):
+      if((payload['records']['data'][x]['strikePrice']==strikePrice) & (payload['records']['data'][x]['expiryDate']==expiryDate)):
+          if(intent==""): return payload['records']['data'][x][optionType]['lastPrice']
+          if(intent=="sell"): return payload['records']['data'][x][optionType]['bidprice']
+          if(intent=="buy"): return payload['records']['data'][x][optionType]['askPrice']
 
 def nse_eq(symbol):
+    symbol = nsesymbolpurify(symbol)
     try:
-        payload = requests.get('https://www.nseindia.com/api/quote-equity?symbol='+symbol.replace('&','%26'),headers=headers).json()
+        payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol)
         try:
             if(payload['error']=={}):
                 print("Please use nse_fno() function to reduce latency.")
-                payload = requests.get('https://www.nseindia.com/api/quote-derivative?symbol='+symbol.replace('&','%26'),headers=headers).json()
+                payload = nsefetch('https://www.nseindia.com/api/quote-derivative?symbol='+symbol)
         except:
             pass
     except KeyError:
@@ -159,12 +268,13 @@ def nse_eq(symbol):
 
 
 def nse_fno(symbol):
+    symbol = nsesymbolpurify(symbol)
     try:
-        payload = requests.get('https://www.nseindia.com/api/quote-derivative?symbol='+symbol.replace('&','%26'),headers=headers).json()
+        payload = nsefetch('https://www.nseindia.com/api/quote-derivative?symbol='+symbol)
         try:
             if(payload['error']=={}):
                 print("Please use nse_eq() function to reduce latency.")
-                payload = requests.get('https://www.nseindia.com/api/quote-equity?symbol='+symbol.replace('&','%26'),headers=headers).json()
+                payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol)
         except KeyError:
             pass
     except KeyError:
@@ -182,9 +292,9 @@ def option_chain(symbol):
 
 def nse_holidays(type="trading"):
     if(type=="clearing"):
-        payload = requests.get('https://www.nseindia.com/api/holiday-master?type=clearing',headers=headers).json()
+        payload = nsefetch('https://www.nseindia.com/api/holiday-master?type=clearing')
     if(type=="trading"):
-        payload = requests.get('https://www.nseindia.com/api/holiday-master?type=trading',headers=headers).json()
+        payload = nsefetch('https://www.nseindia.com/api/holiday-master?type=trading')
     return payload
 
 def holiday_master(type="trading"):
@@ -193,7 +303,7 @@ def holiday_master(type="trading"):
 def nse_results(index="equities",period="Quarterly"):
     if(index=="equities") or (index=="debt") or (index=="sme"):
         if(period=="Quarterly") or (period=="Annual")or (period=="Half-Yearly")or (period=="Others"):
-            payload = requests.get('https://www.nseindia.com/api/corporates-financial-results?index='+index+'&period='+period,headers=headers).json()
+            payload = nsefetch('https://www.nseindia.com/api/corporates-financial-results?index='+index+'&period='+period)
             return pd.json_normalize(payload)
         else:
             print("Give Correct Period Input")
@@ -201,7 +311,15 @@ def nse_results(index="equities",period="Quarterly"):
         print("Give Correct Index Input")
 
 def nse_events():
-    return pd.json_normalize(requests.get('https://www.nseindia.com/api/event-calendar',headers=headers).json())
+    output = nsefetch('https://www.nseindia.com/api/event-calendar')
+    return pd.json_normalize(output)
 
 def nse_past_results(symbol):
-    return requests.get('https://www.nseindia.com/api/results-comparision?symbol='+symbol.replace('&','%26'),headers=headers).json()
+    symbol = nsesymbolpurify(symbol)
+    return nsefetch('https://www.nseindia.com/api/results-comparision?symbol='+symbol)
+
+def expiry_list(symbol):
+    logging.info("Getting Expiry List of: "+ symbol)
+    payload = nse_optionchain_scrapper(symbol,)
+    payload = pd.DataFrame({'Date':payload['records']['expiryDates']})
+    return
