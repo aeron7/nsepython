@@ -5,6 +5,7 @@ import os,sys
 import requests
 import pandas as pd
 import json
+import pytz as pytz
 
 import random
 import datetime,time
@@ -50,9 +51,11 @@ run_time=datetime.datetime.now()
 indices = ['NIFTY','NIFTYIT','BANKNIFTY']
 
 def running_status():
-    start_now=datetime.datetime.now().replace(hour=9, minute=15, second=0, microsecond=0)
-    end_now=datetime.datetime.now().replace(hour=15, minute=45, second=0, microsecond=0)
-    return start_now<datetime.datetime.now()<end_now
+    # timezone to accomodate users out of India
+    indiaTimeZone = pytz.timezone('Asia/Calcutta')    
+    start_now=indiaTimeZone.localize(datetime.datetime.now().replace(hour=9, minute=15, second=0, microsecond=0))
+    end_now=indiaTimeZone.localize(datetime.datetime.now().replace(hour=15, minute=45, second=0, microsecond=0))
+    return start_now<indiaTimeZone.localize(datetime.datetime.now())<end_now
 
 
 #Getting FNO Symboles
