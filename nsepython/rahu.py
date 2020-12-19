@@ -45,17 +45,18 @@ if(mode=='local'):
             output = s.get(payload,headers=headers).json()
         return output
 
-run_time=datetime.datetime.now()
+indiaTimeZone = pytz.timezone('Asia/Calcutta')    
+
+run_time=datetime.datetime.now(indiaTimeZone)
 
 #Constants
 indices = ['NIFTY','NIFTYIT','BANKNIFTY']
 
 def running_status():
     # timezone to accomodate users out of India
-    indiaTimeZone = pytz.timezone('Asia/Calcutta')    
-    start_now=indiaTimeZone.localize(datetime.datetime.now().replace(hour=9, minute=15, second=0, microsecond=0))
-    end_now=indiaTimeZone.localize(datetime.datetime.now().replace(hour=15, minute=45, second=0, microsecond=0))
-    return start_now<indiaTimeZone.localize(datetime.datetime.now())<end_now
+    start_now = datetime.datetime.now(indiaTimeZone).replace(hour=9, minute=15, second=0, microsecond=0)
+    end_now = datetime.datetime.now(indiaTimeZone).replace(hour=15, minute=45, second=0, microsecond=0)
+    return start_now<datetime.datetime.now(indiaTimeZone)<end_now
 
 
 #Getting FNO Symboles
