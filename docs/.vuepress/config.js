@@ -2,6 +2,7 @@ module.exports = {
   title: 'NSEPython',
   description: 'NSEPython is a Python library to get publicly available data on NSE website ie. stock quotes, historical data, live indices, etc.',
   smoothScroll: true,
+  base: '/docs/',
   themeConfig: {
     nav:[
         {text: 'Home', link: '/'},
