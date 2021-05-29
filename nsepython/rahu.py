@@ -5,16 +5,9 @@ import os,sys
 import requests
 import pandas as pd
 import json
-
 import random
 import datetime,time
 import logging
-logging.basicConfig(level=logging.DEBUG)
-
-# pd.set_option('display.max_columns', None)  # or 1000
-# pd.set_option('display.max_rows', None)  # or 1000
-# pd.set_option('display.max_colwidth', -1)  # or 199
-# pd.options.mode.chained_assignment = None  # default='warn' https://stackoverflow.com/questions/20625582/how-to-deal-with-settingwithcopywarning-in-pandas
 
 mode ='local'
 
@@ -37,7 +30,7 @@ if(mode=='local'):
     def nsefetch(payload):
         try:
             output = requests.get(payload,headers=headers).json()
-            print(output)
+            #print(output)
         except ValueError:
             s =requests.Session()
             output = s.get("http://nseindia.com",headers=headers)
@@ -47,13 +40,21 @@ if(mode=='local'):
 run_time=datetime.datetime.now()
 
 #Constants
-indices = ['NIFTY','NIFTYIT','BANKNIFTY']
+indices = ['NIFTY','FINNIFTY','BANKNIFTY']
+
+
+
+
+
+
+
+
+
 
 def running_status():
     start_now=datetime.datetime.now().replace(hour=9, minute=15, second=0, microsecond=0)
-    end_now=datetime.datetime.now().replace(hour=15, minute=45, second=0, microsecond=0)
+    end_now=datetime.datetime.now().replace(hour=15, minute=30, second=0, microsecond=0)
     return start_now<datetime.datetime.now()<end_now
-
 
 #Getting FNO Symboles
 def fnolist():
@@ -82,33 +83,6 @@ def nse_optionchain_scrapper(symbol):
         payload = nsefetch('https://www.nseindia.com/api/option-chain-equities?symbol='+symbol)
     return payload
 
-
-def oi_data_builder():
-    oi_data = pd.DataFrame()
-    symbols=fnolist()
-
-    for i, symbol in enumerate(symbols):
-        #if(i>4):break #Tester
-        logging.info("Fetching: "+symbol)
-        payload = nse_optionchain_scrapper(symbol)
-
-        m=0
-        for m in range(len(payload['records']['data'])):
-            try:
-                try:
-                    payload['records']['data'][m]['PE']['Type']='PE'
-                    oi_data = oi_data.append(payload['records']['data'][m]['PE'],ignore_index=True)
-                except:
-                    pass
-                try:
-                    payload['records']['data'][m]['CE']['Type']='CE'
-                    oi_data = oi_data.append(payload['records']['data'][m]['CE'],ignore_index=True)
-                except:
-                    pass
-            except:
-                logging.info(m)
-
-    return oi_data
 
 def oi_chain_builder (symbol,expiry="latest",oi_mode="full"):
 
@@ -320,6 +294,6 @@ def nse_past_results(symbol):
 
 def expiry_list(symbol):
     logging.info("Getting Expiry List of: "+ symbol)
-    payload = nse_optionchain_scrapper(symbol,)
+    payload = nse_optionchain_scrapper(symbol)
     payload = pd.DataFrame({'Date':payload['records']['expiryDates']})
-    return
+    return payload
