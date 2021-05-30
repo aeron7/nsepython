@@ -78,3 +78,9 @@ print(dte)
 ```
 
 As `inp` is 1 here, It is showing the details of Expiry and PCR of next expiry!
+
+## SecFNO Scarapper Function
+
+This function is written as a complex usage of `nsefetch()` function.
+
+You can check the section of [Building Custom functions with nsefetch() function](nsefetch.html#building-custom-functions) for usage.

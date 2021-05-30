@@ -96,7 +96,7 @@ The Output will show a huge JSON data which will may the loadtime of this site s
 
 [Click Here to see it](/files/file2.json)
 
-You can check the section of Parsing the Data with Pandas in the nsefunction() function for reference.
+You can check the section of [Parsing the Data with Pandas in the nsefetch() function](nsefetch.html#parsing-the-data-with-pandas) for reference.
 
 You can also alternatively use `option_chain()` function instead of `nse_optionchain_scrapper()`.
 
@@ -157,7 +157,7 @@ There are two types of APIs that fetch live quotes for stock in NSE.
 
 Equity API and Derivatives API will show a huge JSON data which will may the loadtime of this site sensitive.
 
-You can check the section of [Parsing the Data with Pandas in the nsefunction() function](nsefetch.html#parsing-the-data-with-pandas) for reference.
+You can check the section of [Parsing the Data with Pandas in the nsefetch() function](nsefetch.html#parsing-the-data-with-pandas) for reference.
 
 ```py
 print(nse_eq("JUSTDIAL"))

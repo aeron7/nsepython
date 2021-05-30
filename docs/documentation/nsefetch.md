@@ -101,8 +101,13 @@ print(nse_custom_function_secfno("Reliance","pChange"))
 2094.45
 5.99
 ```
+::: tip
+This function also comes by default with `nsepython` installation. Try it out!
+:::
 
-So, You can see that the same LTP can be fetched in multiple ways. You can also design Python beautifully to get other attributes like `pChange` which shows how much percentage it is up or down that day.
+So, You can see that the same LTP can be fetched in multiple ways.
+
+You can also design Python beautifully to get other attributes like `pChange` which shows how much percentage it is up or down that day.
 
 The rest of the attributes can be seen from putting the output JSON in the [JSON Formatter](https://jsonformatter.curiousconcept.com/) easily -
 

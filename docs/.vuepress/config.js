@@ -23,7 +23,8 @@ module.exports = {
                     'nsefetch',
                     'basic',
                     'custom',
-                    'special'
+                    'special',
+                    'nsetools'
                     ]
               }
 

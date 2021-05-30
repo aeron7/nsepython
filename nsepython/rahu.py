@@ -8,6 +8,7 @@ import json
 import random
 import datetime,time
 import logging
+import re
 
 mode ='local'
 
@@ -297,3 +298,104 @@ def expiry_list(symbol):
     payload = nse_optionchain_scrapper(symbol)
     payload = pd.DataFrame({'Date':payload['records']['expiryDates']})
     return payload
+
+def nse_custom_function_secfno(symbol,attribute="lastPrice"):
+    positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
+    endp = len(positions['data'])
+    for x in range(0, endp):
+        if(positions['data'][x]['symbol']==symbol.upper()):
+            return positions['data'][x][attribute]
+
+def nse_blockdeal():
+    payload = nsefetch('https://nseindia.com/api/block-deal')
+    return payload
+
+def nse_marketStatus():
+    payload = nsefetch('https://nseindia.com/api/marketStatus')
+    return payload
+
+def nse_circular(mode="latest"):
+    if(mode=="latest"):
+        payload = nsefetch('https://nseindia.com/api/latest-circular')
+    else:
+        payload = nsefetch('https://www.nseindia.com/api/circulars')
+    return payload
+
+def nse_fiidii(mode="pandas"):
+    try:
+        if(mode=="pandas"):
+            return pd.DataFrame(nsefetch('https://www.nseindia.com/api/fiidiiTradeReact'))
+        else:
+            return nsefetch('https://www.nseindia.com/api/fiidiiTradeReact')
+    except:
+        logger.info("Pandas is not working for some reason.")
+        return nsefetch('https://www.nseindia.com/api/fiidiiTradeReact')
+
+def nsetools_get_quote(symbol):
+    payload = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
+    for m in range(len(payload['data'])):
+        if(payload['data'][m]['symbol']==symbol.upper()):
+            return payload['data'][m]
+
+
+def nse_index():
+    payload = nsefetch('https://iislliveblob.niftyindices.com/jsonfiles/LiveIndicesWatch.json')
+    payload = pd.DataFrame(payload["data"])
+    return payload
+
+def nse_get_index_list():
+    payload = nsefetch('https://iislliveblob.niftyindices.com/jsonfiles/LiveIndicesWatch.json')
+    payload = pd.DataFrame(payload["data"])
+    return payload["indexName"].tolist()
+
+def get_index_quote(index):
+    payload = nsefetch('https://iislliveblob.niftyindices.com/jsonfiles/LiveIndicesWatch.json')
+    for m in range(len(payload['data'])):
+        if(payload['data'][m]["indexName"] == index.upper()):
+            return payload['data'][m]
+
+def nse_get_advances_declines(mode="pandas"):
+    try:
+        if(mode=="pandas"):
+            positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
+            return pd.DataFrame(positions['data'])
+        else:
+            return nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
+    except:
+        logger.info("Pandas is not working for some reason.")
+        return nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
+
+def mse_get_top_losers():
+    positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
+    df = pd.DataFrame(positions['data'])
+    df = df.sort_values(by="pChange")
+    return df.head(5)
+
+def nse_get_top_gainers():
+    positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
+    df = pd.DataFrame(positions['data'])
+    df = df.sort_values(by="pChange" , ascending = False)
+    return df.head(5)
+
+def nse_get_fno_lot_sizes(symbol="all",mode="list"):
+    url="https://archives.nseindia.com/content/fo/fo_mktlots.csv"
+
+    if(mode=="list"):
+        s=requests.get(url).text
+        res_dict = {}
+        for line in s.split('\n'):
+          if line != '' and re.search(',', line) and (line.casefold().find('symbol') == -1):
+              (code, name) = [x.strip() for x in line.split(',')[1:3]]
+              res_dict[code] = int(name)
+        if(symbol=="all"):
+            return res_dict
+        if(symbol!=""):
+            return res_dict[symbol.upper()]
+
+    if(mode=="pandas"):
+        payload = pd.read_csv(url)
+        if(symbol=="all"):
+            return payload
+        else:
+            payload = payload[(payload.iloc[:, 1] == symbol.upper())]
+            return payload
