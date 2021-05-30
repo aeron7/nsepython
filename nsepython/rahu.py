@@ -348,7 +348,7 @@ def nse_get_index_list():
     payload = pd.DataFrame(payload["data"])
     return payload["indexName"].tolist()
 
-def get_index_quote(index):
+def nse_get_index_quote(index):
     payload = nsefetch('https://iislliveblob.niftyindices.com/jsonfiles/LiveIndicesWatch.json')
     for m in range(len(payload['data'])):
         if(payload['data'][m]["indexName"] == index.upper()):

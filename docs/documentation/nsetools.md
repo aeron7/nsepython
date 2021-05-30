@@ -141,7 +141,7 @@ Pick one of the index codes from the above list and use it as follows. For examp
 **Example Usage:**
 
 ```py
-print(get_index_quote("nifty bank"))
+print(nse_get_index_quote("nifty bank"))
 ```
 
 **Output:**
