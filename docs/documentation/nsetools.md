@@ -71,30 +71,6 @@ print(nsetools_get_quote("reliance"))
 }
 ```
 
-## The Holiday API
-
-There are two types -
-- [https://www.nseindia.com/api/?type=trading](https://www.nseindia.com/api/?type=trading)
-- [https://www.nseindia.com/api/?type=clearing](https://www.nseindia.com/api/?type=clearing)
-
-Here is how to use the function
-
-```py
-nse_holidays(type)
-```
-or,
-```py
-holiday_master(type)
-```
-
-type = `trading` or `clearing`. By default, `trading` will be selected.
-
-Here is how to see the holidays of FNOs -
-
-```py
-print(pd.json_normalize(nse_holidays()['FO']))
-```
-
 ## And the Index Quote
 
 You don’t always need a stock quote. At times it is just enough to know the index status. A market in general is home to many indices, in other words there are more that on index which are traded in a market.

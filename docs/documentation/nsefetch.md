@@ -23,7 +23,7 @@ print(positions)
 
 The Output will show a huge JSON data which will may the loadtime of this site sensitive.
 
-[Click Here to see it](/files/file1.json)
+[Click Here to see it](/nsepython/files/file1.json)
 
 ## Parsing the Data with Pandas
 
@@ -34,7 +34,7 @@ You can check these following sites to navigate through the data schema or help 
 
 Let's study how you can manage this huge data by Python and `Pandas` Library.Note that `Pandas` is already preinstalled with `NSEPython`. If You have put the shared JSON Output in the [JSON Formatter](https://jsonformatter.curiousconcept.com/), You will see something like this -
 
-<img src="/images/json1.png" alt="JSON Formatter">
+<img :src="$withBase('/images/json1.png')" alt="JSON Formatter">
 
 Anyways, If check it further You can see the `data` holds a `Python List`. All we have to do is to convert the `List` to `Pandas`. [Reference](https://www.geeksforgeeks.org/create-a-pandas-dataframe-from-lists/)
 
@@ -111,4 +111,4 @@ You can also design Python beautifully to get other attributes like `pChange` wh
 
 The rest of the attributes can be seen from putting the output JSON in the [JSON Formatter](https://jsonformatter.curiousconcept.com/) easily -
 
-<img src="/images/attributes.png" alt="JSON Formatter">
+<img :src="$withBase('/images/attributes.png')" alt="JSON Formatter">

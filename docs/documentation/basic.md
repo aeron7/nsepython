@@ -94,7 +94,7 @@ print(nse_optionchain_scrapper('PVR'))
 **Output**
 The Output will show a huge JSON data which will may the loadtime of this site sensitive.
 
-[Click Here to see it](/files/file2.json)
+[Click Here to see it](/nsepython/files/file2.json)
 
 You can check the section of [Parsing the Data with Pandas in the nsefetch() function](nsefetch.html#parsing-the-data-with-pandas) for reference.
 
