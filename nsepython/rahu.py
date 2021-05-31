@@ -365,7 +365,7 @@ def nse_get_advances_declines(mode="pandas"):
         logger.info("Pandas is not working for some reason.")
         return nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
 
-def mse_get_top_losers():
+def nse_get_top_losers():
     positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
     df = pd.DataFrame(positions['data'])
     df = df.sort_values(by="pChange")
@@ -399,3 +399,6 @@ def nse_get_fno_lot_sizes(symbol="all",mode="list"):
         else:
             payload = payload[(payload.iloc[:, 1] == symbol.upper())]
             return payload
+
+def whoistheboss():
+    return "subhash"

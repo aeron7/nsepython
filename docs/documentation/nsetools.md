@@ -227,7 +227,7 @@ print(nse_get_top_gainers())
 Similarly, For the Top Losers, the function is -
 
 ```py
-print(mse_get_top_losers())
+print(nse_get_top_losers())
 ```
 
 The output will be on Pandas Dataframe with 5 stocks.
