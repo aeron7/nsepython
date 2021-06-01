@@ -1,4 +1,4 @@
-<p align="center">
+<p align="left">
   <a href="https://aeron7.github.io/nsepython/" target="_blank">
     <img width="300" src="https://github.com/aeron7/nsepython/blob/master/nsepython.png" alt="logo">
   </a>
