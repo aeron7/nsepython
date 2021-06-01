@@ -1,4 +1,10 @@
-<img src="https://github.com/aeron7/nsepython/blob/master/nsepython.png" width="300px">
+<img src="" width="300px">
+<p align="center">
+  <a href="https://aeron7.github.io/nsepython/" target="_blank">
+    <img width="300" src="https://github.com/aeron7/nsepython/blob/master/nsepython.png" alt="logo">
+  </a>
+</p>
+
 NSEPython is a Python library for dealing with [NSEIndia](nseindia.com) APIs.
 
 ## Installation
