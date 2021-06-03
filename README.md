@@ -12,11 +12,6 @@
   </a>
 </p>
 
-
-
-
-
-
 ## Installation
 
 Use the package manager [pip](https://pypi.org/project/nsepython/) to install nsepython.
@@ -36,8 +31,6 @@ pip install nsepython
 - Event Calendar API
 - Results API
 - Past Results API
-
-For Full Documentation and Sample Code, Refer - https://forum.unofficed.com/t/nsepython-documentation/376
 
 ## Contributing
 For Discussion and Improving this Code, Join - https://www.unofficed.com/chat/
