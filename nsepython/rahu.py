@@ -183,11 +183,10 @@ def nse_quote_ltp(symbol,expiryDate="latest",optionType="-",strikePrice=0):
   #https://stackoverflow.com/questions/7961363/removing-duplicates-in-lists
   #https://stackoverflow.com/questions/19199984/sort-a-list-in-python
   if(expiryDate=="latest") or (expiryDate=="next"):
-    if(optionType!="Fut"):
-      dates=list(set((payload["expiryDates"])))
-      dates.sort(key = lambda date: datetime.datetime.strptime(date, '%d-%b-%Y'))
-      expiryDate=dates[0]
-      if(expiryDate=="next"):expiryDate=dates[1]
+    dates=list(set((payload["expiryDates"])))
+    dates.sort(key = lambda date: datetime.datetime.strptime(date, '%d-%b-%Y'))
+    if(expiryDate=="latest"): expiryDate=dates[0]
+    if(expiryDate=="next"): expiryDate=dates[1]
 
   meta = "Options"
   if(optionType=="Fut"): meta = "Futures"
@@ -198,26 +197,31 @@ def nse_quote_ltp(symbol,expiryDate="latest",optionType="-",strikePrice=0):
       for i in payload['stocks']:
         if meta in i['metadata']['instrumentType']:
           #print(i['metadata'])
-          if(expiryDate=="latest"):
-            lastPrice = i['metadata']['lastPrice']
-            break
-
-          if (i['metadata']["expiryDate"]==expiryDate):
-            if (i['metadata']["optionType"]==optionType):
-              if (i['metadata']["strikePrice"]==strikePrice):
-                #print(i['metadata'])
+          if(optionType=="Fut"):
+              if(i['metadata']['expiryDate']==expiryDate):
                 lastPrice = i['metadata']['lastPrice']
+
+          if((optionType=="Put")or(optionType=="Call")):
+              if (i['metadata']["expiryDate"]==expiryDate):
+                if (i['metadata']["optionType"]==optionType):
+                  if (i['metadata']["strikePrice"]==strikePrice):
+                    #print(i['metadata'])
+                    lastPrice = i['metadata']['lastPrice']
 
   if(optionType=="-"):
       lastPrice = payload['underlyingValue']
 
   return lastPrice
 
-  # print(nse_quote_ltp("BANKNIFTY"))
-  # print(nse_quote_ltp("RELIANCE","latest","Fut"))
-  # print(nse_quote_ltp("RELIANCE"))
-  # print(nse_quote_ltp("BANKNIFTY","13-Aug-2020","PE",21000))
-  # print(nse_quote_ltp("RELIANCE","latest","PE",2300))
+# print(nse_quote_ltp("RELIANCE"))
+# print(nse_quote_ltp("RELIANCE","latest","Fut"))
+# print(nse_quote_ltp("RELIANCE","next","Fut"))
+# print(nse_quote_ltp("BANKNIFTY","latest","PE",32000))
+# print(nse_quote_ltp("BANKNIFTY","next","PE",32000))
+# print(nse_quote_ltp("BANKNIFTY","10-Jun-2021","PE",32000))
+# print(nse_quote_ltp("BANKNIFTY","17-Jun-2021","PE",32000))
+# print(nse_quote_ltp("RELIANCE","latest","PE",2300))
+# print(nse_quote_ltp("RELIANCE","next","PE",2300))
 
 def nse_optionchain_ltp(payload,strikePrice,optionType,inp=0,intent=""):
     expiryDate=payload['records']['expiryDates'][inp]
@@ -293,11 +297,20 @@ def nse_past_results(symbol):
     symbol = nsesymbolpurify(symbol)
     return nsefetch('https://www.nseindia.com/api/results-comparision?symbol='+symbol)
 
-def expiry_list(symbol):
+def expiry_list(symbol,type="list"):
     logging.info("Getting Expiry List of: "+ symbol)
-    payload = nse_optionchain_scrapper(symbol)
-    payload = pd.DataFrame({'Date':payload['records']['expiryDates']})
-    return payload
+
+    if(type!="list"):
+        payload = nse_optionchain_scrapper(symbol)
+        payload = pd.DataFrame({'Date':payload['records']['expiryDates']})
+        return payload
+
+    if(type=="list"):
+        payload = nse_quote(symbol)
+        dates=list(set((payload["expiryDates"])))
+        dates.sort(key = lambda date: datetime.datetime.strptime(date, '%d-%b-%Y'))
+        return dates
+
 
 def nse_custom_function_secfno(symbol,attribute="lastPrice"):
     positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
