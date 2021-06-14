@@ -415,3 +415,128 @@ def nse_get_fno_lot_sizes(symbol="all",mode="list"):
 
 def whoistheboss():
     return "subhash"
+
+def indiavix():
+    payload = nsefetch("https://www.nseindia.com/api/allIndices")
+    for x in range(0, len(payload["data"])):
+        if(payload["data"][x]["index"]=="INDIA VIX"):
+            return payload["data"][x]["last"]
+
+def index_info(index):
+    payload = nsefetch("https://www.nseindia.com/api/allIndices")
+    for x in range(0, len(payload["data"])):
+        if(payload["data"][x]["index"]==index):
+            return payload["data"][x]
+
+import math
+from scipy.stats import norm
+
+def black_scholes_dexter(S0,X,t,σ="",r=10,q=0.0,td=365):
+
+  if(σ==""):σ =indiavix()
+
+  S0,X,σ,r,q,t = float(S0),float(X),float(σ/100),float(r/100),float(q/100),float(t/td)
+  #https://unofficed.com/black-scholes-model-options-calculator-google-sheet/
+
+  d1 = (math.log(S0/X)+(r-q+0.5*σ**2)*t)/(σ*math.sqrt(t))
+  #stackoverflow.com/questions/34258537/python-typeerror-unsupported-operand-types-for-float-and-int
+
+  #stackoverflow.com/questions/809362/how-to-calculate-cumulative-normal-distribution
+  Nd1 = (math.exp((-d1**2)/2))/math.sqrt(2*math.pi)
+  d2 = d1-σ*math.sqrt(t)
+  Nd2 = norm.cdf(d2)
+  call_theta =(-((S0*σ*math.exp(-q*t))/(2*math.sqrt(t))*(1/(math.sqrt(2*math.pi)))*math.exp(-(d1*d1)/2))-(r*X*math.exp(-r*t)*norm.cdf(d2))+(q*math.exp(-q*t)*S0*norm.cdf(d1)))/td
+  put_theta =(-((S0*σ*math.exp(-q*t))/(2*math.sqrt(t))*(1/(math.sqrt(2*math.pi)))*math.exp(-(d1*d1)/2))+(r*X*math.exp(-r*t)*norm.cdf(-d2))-(q*math.exp(-q*t)*S0*norm.cdf(-d1)))/td
+  call_premium =math.exp(-q*t)*S0*norm.cdf(d1)-X*math.exp(-r*t)*norm.cdf(d1-σ*math.sqrt(t))
+  put_premium =X*math.exp(-r*t)*norm.cdf(-d2)-math.exp(-q*t)*S0*norm.cdf(-d1)
+  call_delta =math.exp(-q*t)*norm.cdf(d1)
+  put_delta =math.exp(-q*t)*(norm.cdf(d1)-1)
+  gamma =(math.exp(-r*t)/(S0*σ*math.sqrt(t)))*(1/(math.sqrt(2*math.pi)))*math.exp(-(d1*d1)/2)
+  vega = ((1/100)*S0*math.exp(-r*t)*math.sqrt(t))*(1/(math.sqrt(2*math.pi))*math.exp(-(d1*d1)/2))
+  call_rho =(1/100)*X*t*math.exp(-r*t)*norm.cdf(d2)
+  put_rho =(-1/100)*X*t*math.exp(-r*t)*norm.cdf(-d2)
+
+  return call_theta,put_theta,call_premium,put_premium,call_delta,put_delta,gamma,vega,call_rho,put_rho
+
+def equity_history(symbol,series,start_date,end_date):
+    payload = nsefetch("https://www.nseindia.com/api/historical/cm/equity?symbol="+symbol+"&series=[%22"+series+"%22]&from="+start_date+"&to="+end_date+"")
+    return pd.DataFrame.from_records(payload["data"])
+
+def derivative_history(symbol,start_date,end_date,instrumentType,expiry_date,strikePrice="",optionType=""):
+
+    instrumentType = instrumentType.lower()
+
+    if(instrumentType=="options"):
+        if("NIFTY" in symbol): instrumentType="FUTSTK"
+        instrumentType="OPTSTK"
+    if(instrumentType=="futures"):
+        if("NIFTY" in symbol): instrumentType="OPTIDX"
+        instrumentType="FUTIDX"
+
+    if(((instrumentType=="OPTIDX")or (instrumentType=="OPTSTK")) and (expiry_date!="")):
+        strikePrice = "%.2f" % strikePrice
+        strikePrice = str(strikePrice)
+
+    nsefetch_url = "https://www.nseindia.com/api/historical/fo/derivatives?&from="+start_date+"&to="+end_date+"&optionType="+optionType+"&strikePrice="+strikePrice+"&expiryDate="+expiry_date+"&instrumentType="+instrumentType+"&symbol="+symbol+""
+    payload = nsefetch(nsefetch_url)
+    return pd.DataFrame.from_records(payload["data"])
+
+
+def expiry_history(symbol,start_date="",end_date=""):
+    if(end_date==""):end_date=end_date
+    nsefetch_url = "https://www.nseindia.com/api/historical/fo/derivatives/meta?&from="+start_date+"&to="+end_date+"&symbol="+symbol+""
+    payload = nsefetch(nsefetch_url)
+    return payload['data'][2]
+
+# # Nifty Indicies Site
+
+niftyindices_headers = {
+    'Connection': 'keep-alive',
+    'sec-ch-ua': '" Not;A Brand";v="99", "Google Chrome";v="91", "Chromium";v="91"',
+    'Accept': 'application/json, text/javascript, */*; q=0.01',
+    'DNT': '1',
+    'X-Requested-With': 'XMLHttpRequest',
+    'sec-ch-ua-mobile': '?0',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36',
+    'Content-Type': 'application/json; charset=UTF-8',
+    'Origin': 'https://niftyindices.com',
+    'Sec-Fetch-Site': 'same-origin',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Dest': 'empty',
+    'Referer': 'https://niftyindices.com/reports/historical-data',
+    'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
+}
+
+def index_history(symbol,start_date,end_date):
+    data = "{'name':'"+symbol+"','startDate':'"+start_date+"','endDate':'"+end_date+"'}"
+    payload = requests.post('https://niftyindices.com/Backpage.aspx/getHistoricaldatatabletoString', headers=niftyindices_headers,  data=data).json()
+    payload = json.loads(payload["d"])
+    payload=pd.DataFrame.from_records(payload)
+    return payload
+
+def index_pe_pb_div(symbol,start_date,end_date):
+    data = "{'name':'"+symbol+"','startDate':'"+start_date+"','endDate':'"+end_date+"'}"
+    payload = requests.post('https://niftyindices.com/Backpage.aspx/getpepbHistoricaldataDBtoString', headers=niftyindices_headers,  data=data).json()
+    payload = json.loads(payload["d"])
+    payload=pd.DataFrame.from_records(payload)
+    return payload
+
+def index_total_returns(symbol,start_date,end_date):
+    data = "{'name':'"+symbol+"','startDate':'"+start_date+"','endDate':'"+end_date+"'}"
+    payload = requests.post('https://niftyindices.com/Backpage.aspx/getTotalReturnIndexString', headers=niftyindices_headers,  data=data).json()
+    payload = json.loads(payload["d"])
+    payload=pd.DataFrame.from_records(payload)
+    return payload
+
+def get_bhavcopy(date):
+    date = date.replace("-","")
+    payload=pd.read_csv("https://archives.nseindia.com/products/content/sec_bhavdata_full_"+date+".csv")
+    return payload
+
+def get_bulkdeals():
+    payload=pd.read_csv("https://archives.nseindia.com/content/equities/bulk.csv")
+    return payload
+
+def get_blockdeals():
+    payload=pd.read_csv("https://archives.nseindia.com/content/equities/block.csv")
+    return payload
