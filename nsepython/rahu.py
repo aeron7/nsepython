@@ -540,3 +540,49 @@ def get_bulkdeals():
 def get_blockdeals():
     payload=pd.read_csv("https://archives.nseindia.com/content/equities/block.csv")
     return payload
+
+#Request from subhash
+## https://unofficed.com/how-to-find-the-beta-of-indian-stocks-using-python/
+def get_beta_df_maker(symbol,days):
+    if("NIFTY" in symbol):
+        end_date = datetime.datetime.now().strftime("%d-%b-%Y")
+        end_date = str(end_date)
+
+        start_date = (datetime.datetime.now()- datetime.timedelta(days=days)).strftime("%d-%b-%Y")
+        start_date = str(start_date)
+
+        df2=index_history(symbol,start_date,end_date)
+        df2["daily_change"]=df2["CLOSE"].astype(float).pct_change()
+        df2=df2[['HistoricalDate','daily_change']]
+        df2 = df2.iloc[1: , :]
+        return df2
+    else:
+        end_date = datetime.datetime.now().strftime("%d-%m-%Y")
+        end_date = str(end_date)
+
+        start_date = (datetime.datetime.now()- datetime.timedelta(days=days)).strftime("%d-%m-%Y")
+        start_date = str(start_date)
+
+        df = equity_history(symbol,"EQ",start_date,end_date)
+
+        df["daily_change"]=df["CH_CLOSING_PRICE"].pct_change()
+        df=df[['CH_TIMESTAMP','daily_change']]
+        df = df.iloc[1: , :] #thispointer.com/drop-first-row-of-pandas-dataframe-3-ways/
+        return df
+
+def get_beta(symbol,days,symbol2="NIFTY 50"):
+    df = get_beta_df_maker(symbol,days)
+    df2 = get_beta_df_maker(symbol2,days)
+
+    x=df["daily_change"].tolist()
+    y=df2["daily_change"].tolist()
+    #stackoverflow.com/questions/42670055/is-there-any-better-way-to-calculate-the-covariance-of-two-lists-than-this
+    mean_x = sum(x) / len(x)
+    mean_y = sum(y) / len(y)
+    covariance = sum((a - mean_x) * (b - mean_y) for (a,b) in zip(x,y)) / len(x)
+
+    mean = sum(y) / len(y)
+    variance = sum((i - mean) ** 2 for i in y) / len(y)
+
+    beta = covariance/variance
+    return round(beta,3)
