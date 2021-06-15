@@ -570,7 +570,10 @@ def get_beta_df_maker(symbol,days):
         df = df.iloc[1: , :] #thispointer.com/drop-first-row-of-pandas-dataframe-3-ways/
         return df
 
-def get_beta(symbol,days=248,symbol2="NIFTY 50"):
+def getbeta(symbol,days=365,symbol2="NIFTY 50"):
+    return get_beta(symbol,days,symbol2)
+
+def get_beta(symbol,days=365,symbol2="NIFTY 50"):
     #Default is 248 days. (Input of Subhash)
     df = get_beta_df_maker(symbol,days)
     df2 = get_beta_df_maker(symbol2,days)
