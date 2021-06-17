@@ -590,3 +590,17 @@ def get_beta(symbol,days=365,symbol2="NIFTY 50"):
 
     beta = covariance/variance
     return round(beta,3)
+
+def nse_preopen(key="NIFTY",type="pandas"):
+    payload = nsefetch("https://www.nseindia.com/api/market-data-pre-open?key="+key+"")
+    if(type=="pandas"):
+        payload = pd.DataFrame(payload['data'])
+        payload  = pd.json_normalize(payload['metadata'])
+        return payload
+    else:
+        return payload
+
+#By Avinash https://forum.unofficed.com/t/nsepython-documentation/376/102?u=dexter
+def nse_preopen_movers(key="FO",filter=1.5):
+    preOpen_gainer=nse_preopen(key)
+    return preOpen_gainer[preOpen_gainer['pChange'] >1.5],preOpen_gainer[preOpen_gainer['pChange'] <-1.5]
