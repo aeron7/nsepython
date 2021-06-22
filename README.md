@@ -12,6 +12,10 @@
   </a>
 </p>
 
+NSE Historical Data is also available using NSEPython. <br/>
+The functions are in beta phase. I will update them shortly. <br/>
+But to see all beta functions You can see - [https://forum.unofficed.com/t/nsepython-documentation/376/107](https://forum.unofficed.com/t/nsepython-documentation/376/107)
+
 ## Installation
 
 Use the package manager [pip](https://pypi.org/project/nsepython/) to install nsepython.
