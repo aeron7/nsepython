@@ -487,7 +487,7 @@ def equity_history(symbol,series,start_date,end_date):
         logging.info("Loop = "+str(i))
         logging.info("====")
         logging.info("Starting Date: "+str(start_date))
-        logging.info("Ending Date: "+str(end_date))
+        logging.info("Ending Date: "+str(temp_date))
         logging.info("====")
 
         total=total.append(equity_history_virgin(symbol,series,start_date,temp_date))
@@ -514,7 +514,7 @@ def equity_history(symbol,series,start_date,end_date):
     payload = total.iloc[::-1].reset_index(drop=True)
     return payload
 
-def derivative_history(symbol,start_date,end_date,instrumentType,expiry_date,strikePrice="",optionType=""):
+def derivative_history_virgin(symbol,start_date,end_date,instrumentType,expiry_date,strikePrice="",optionType=""):
 
     instrumentType = instrumentType.lower()
 
@@ -529,9 +529,60 @@ def derivative_history(symbol,start_date,end_date,instrumentType,expiry_date,str
         strikePrice = "%.2f" % strikePrice
         strikePrice = str(strikePrice)
 
-    nsefetch_url = "https://www.nseindia.com/api/historical/fo/derivatives?&from="+start_date+"&to="+end_date+"&optionType="+optionType+"&strikePrice="+strikePrice+"&expiryDate="+expiry_date+"&instrumentType="+instrumentType+"&symbol="+symbol+""
+    nsefetch_url = "https://www.nseindia.com/api/historical/fo/derivatives?&from="+str(start_date)+"&to="+str(end_date)+"&optionType="+optionType+"&strikePrice="+strikePrice+"&expiryDate="+expiry_date+"&instrumentType="+instrumentType+"&symbol="+symbol+""
     payload = nsefetch(nsefetch_url)
+    logging.info(payload)
     return pd.DataFrame.from_records(payload["data"])
+
+def derivative_history(symbol,start_date,end_date,instrumentType,expiry_date,strikePrice="",optionType=""):
+    #We are getting the input in text. So it is being converted to Datetime object from String.
+    start_date = datetime.datetime.strptime(start_date, "%d-%m-%Y")
+    end_date = datetime.datetime.strptime(end_date, "%d-%m-%Y")
+    logging.info("Starting Date: "+str(start_date))
+    logging.info("Ending Date: "+str(end_date))
+
+    #We are calculating the difference between the days
+    diff = end_date-start_date
+    logging.info("Total Number of Days: "+str(diff.days))
+    logging.info("Total FOR Loops in the program: "+str(int(diff.days/40)))
+    logging.info("Remainder Loop: " + str(diff.days-(int(diff.days/40)*40)))
+
+
+    total=pd.DataFrame()
+    for i in range (0,int(diff.days/40)):
+
+        temp_date = (start_date+datetime.timedelta(days=(40))).strftime("%d-%m-%Y")
+        start_date = datetime.datetime.strftime(start_date, "%d-%m-%Y")
+
+        logging.info("Loop = "+str(i))
+        logging.info("====")
+        logging.info("Starting Date: "+str(start_date))
+        logging.info("Ending Date: "+str(temp_date))
+        logging.info("====")
+
+        total=total.append(derivative_history_virgin(symbol,start_date,temp_date,instrumentType,expiry_date,strikePrice,optionType))
+
+        logging.info("Length of the Table: "+ str(len(total)))
+
+        #Preparation for the next loop
+        start_date = datetime.datetime.strptime(temp_date, "%d-%m-%Y")
+
+
+    start_date = datetime.datetime.strftime(start_date, "%d-%m-%Y")
+    end_date = datetime.datetime.strftime(end_date, "%d-%m-%Y")
+
+    logging.info("End Loop")
+    logging.info("====")
+    logging.info("Starting Date: "+str(start_date))
+    logging.info("Ending Date: "+str(end_date))
+    logging.info("====")
+
+    total=total.append(derivative_history_virgin(symbol,start_date,end_date,instrumentType,expiry_date,strikePrice,optionType))
+
+    logging.info("Finale")
+    logging.info("Length of the Total Dataset: "+ str(len(total)))
+    payload = total.iloc[::-1].reset_index(drop=True)
+    return payload
 
 
 def expiry_history(symbol,start_date="",end_date=""):
