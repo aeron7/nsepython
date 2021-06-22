@@ -458,9 +458,61 @@ def black_scholes_dexter(S0,X,t,σ="",r=10,q=0.0,td=365):
 
   return call_theta,put_theta,call_premium,put_premium,call_delta,put_delta,gamma,vega,call_rho,put_rho
 
-def equity_history(symbol,series,start_date,end_date):
-    payload = nsefetch("https://www.nseindia.com/api/historical/cm/equity?symbol="+symbol+"&series=[%22"+series+"%22]&from="+start_date+"&to="+end_date+"")
+def equity_history_virgin(symbol,series,start_date,end_date):
+    url="https://www.nseindia.com/api/historical/cm/equity?symbol="+symbol+"&series=[%22"+series+"%22]&from="+str(start_date)+"&to="+str(end_date)+""
+    payload = nsefetch(url)
     return pd.DataFrame.from_records(payload["data"])
+
+# You shall see beautiful use the logger function.
+def equity_history(symbol,series,start_date,end_date):
+    #We are getting the input in text. So it is being converted to Datetime object from String.
+    start_date = datetime.datetime.strptime(start_date, "%d-%m-%Y")
+    end_date = datetime.datetime.strptime(end_date, "%d-%m-%Y")
+    logging.info("Starting Date: "+str(start_date))
+    logging.info("Ending Date: "+str(end_date))
+
+    #We are calculating the difference between the days
+    diff = end_date-start_date
+    logging.info("Total Number of Days: "+str(diff.days))
+    logging.info("Total FOR Loops in the program: "+str(int(diff.days/40)))
+    logging.info("Remainder Loop: " + str(diff.days-(int(diff.days/40)*40)))
+
+
+    total=pd.DataFrame()
+    for i in range (0,int(diff.days/40)):
+
+        temp_date = (start_date+datetime.timedelta(days=(40))).strftime("%d-%m-%Y")
+        start_date = datetime.datetime.strftime(start_date, "%d-%m-%Y")
+
+        logging.info("Loop = "+str(i))
+        logging.info("====")
+        logging.info("Starting Date: "+str(start_date))
+        logging.info("Ending Date: "+str(end_date))
+        logging.info("====")
+
+        total=total.append(equity_history_virgin(symbol,series,start_date,temp_date))
+
+        logging.info("Length of the Table: "+ str(len(total)))
+
+        #Preparation for the next loop
+        start_date = datetime.datetime.strptime(temp_date, "%d-%m-%Y")
+
+
+    start_date = datetime.datetime.strftime(start_date, "%d-%m-%Y")
+    end_date = datetime.datetime.strftime(end_date, "%d-%m-%Y")
+
+    logging.info("End Loop")
+    logging.info("====")
+    logging.info("Starting Date: "+str(start_date))
+    logging.info("Ending Date: "+str(end_date))
+    logging.info("====")
+
+    total=total.append(equity_history_virgin(symbol,series,start_date,end_date))
+
+    logging.info("Finale")
+    logging.info("Length of the Total Dataset: "+ str(len(total)))
+    payload = total.iloc[::-1].reset_index(drop=True)
+    return payload
 
 def derivative_history(symbol,start_date,end_date,instrumentType,expiry_date,strikePrice="",optionType=""):
 
