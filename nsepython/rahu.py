@@ -182,6 +182,14 @@ def nse_quote_ltp(symbol,expiryDate="latest",optionType="-",strikePrice=0):
   payload = nse_quote(symbol)
   #https://stackoverflow.com/questions/7961363/removing-duplicates-in-lists
   #https://stackoverflow.com/questions/19199984/sort-a-list-in-python
+
+  #BankNIFTY and NIFTY has weekly options. Using this Jugaad which has primary base of assumption that Reliance will not step out of FNO.
+  #forum.unofficed.com/t/unable-to-find-nse-quote-meta-api/702/4
+  if((symbol in indices) and (optionType=="Fut")):
+    dates = expiry_list("RELIANCE","list")
+    if(expiryDate=="latest"): expiryDate=dates[0]
+    if(expiryDate=="next"): expiryDate=dates[1]
+    
   if(expiryDate=="latest") or (expiryDate=="next"):
     dates=list(set((payload["expiryDates"])))
     dates.sort(key = lambda date: datetime.datetime.strptime(date, '%d-%b-%Y'))
@@ -222,6 +230,49 @@ def nse_quote_ltp(symbol,expiryDate="latest",optionType="-",strikePrice=0):
 # print(nse_quote_ltp("BANKNIFTY","17-Jun-2021","PE",32000))
 # print(nse_quote_ltp("RELIANCE","latest","PE",2300))
 # print(nse_quote_ltp("RELIANCE","next","PE",2300))
+
+def nse_quote_meta(symbol,expiryDate="latest",optionType="-",strikePrice=0):
+  payload = nse_quote(symbol)
+  #https://stackoverflow.com/questions/7961363/removing-duplicates-in-lists
+  #https://stackoverflow.com/questions/19199984/sort-a-list-in-python
+
+  #BankNIFTY and NIFTY has weekly options. Using this Jugaad which has primary base of assumption that Reliance will not step out of FNO.
+  #forum.unofficed.com/t/unable-to-find-nse-quote-meta-api/702/4
+  if((symbol in indices) and (optionType=="Fut")):
+    dates = expiry_list("RELIANCE","list")
+    if(expiryDate=="latest"): expiryDate=dates[0]
+    if(expiryDate=="next"): expiryDate=dates[1]
+
+  if(expiryDate=="latest") or (expiryDate=="next"):
+    dates=list(set((payload["expiryDates"])))
+    dates.sort(key = lambda date: datetime.datetime.strptime(date, '%d-%b-%Y'))
+    if(expiryDate=="latest"): expiryDate=dates[0]
+    if(expiryDate=="next"): expiryDate=dates[1]
+
+  meta = "Options"
+  if(optionType=="Fut"): meta = "Futures"
+  if(optionType=="PE"):optionType="Put"
+  if(optionType=="CE"):optionType="Call"
+
+  if(optionType!="-"):
+      for i in payload['stocks']:
+        if meta in i['metadata']['instrumentType']:
+          #print(i['metadata'])
+          if(optionType=="Fut"):
+              if(i['metadata']['expiryDate']==expiryDate):
+                metadata = i['metadata']
+
+          if((optionType=="Put")or(optionType=="Call")):
+              if (i['metadata']["expiryDate"]==expiryDate):
+                if (i['metadata']["optionType"]==optionType):
+                  if (i['metadata']["strikePrice"]==strikePrice):
+                    #print(i['metadata'])
+                    metadata = i['metadata']
+
+  if(optionType=="-"):
+      metadata = i['metadata']
+
+  return metadata
 
 def nse_optionchain_ltp(payload,strikePrice,optionType,inp=0,intent=""):
     expiryDate=payload['records']['expiryDates'][inp]
