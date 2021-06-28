@@ -189,7 +189,7 @@ def nse_quote_ltp(symbol,expiryDate="latest",optionType="-",strikePrice=0):
     dates = expiry_list("RELIANCE","list")
     if(expiryDate=="latest"): expiryDate=dates[0]
     if(expiryDate=="next"): expiryDate=dates[1]
-    
+
   if(expiryDate=="latest") or (expiryDate=="next"):
     dates=list(set((payload["expiryDates"])))
     dates.sort(key = lambda date: datetime.datetime.strptime(date, '%d-%b-%Y'))
@@ -758,3 +758,15 @@ def nse_preopen(key="NIFTY",type="pandas"):
 def nse_preopen_movers(key="FO",filter=1.5):
     preOpen_gainer=nse_preopen(key)
     return preOpen_gainer[preOpen_gainer['pChange'] >1.5],preOpen_gainer[preOpen_gainer['pChange'] <-1.5]
+
+# type = "securities"
+# type = "etf"
+# type = "sme"
+#
+# sort = "volume"
+# sort = "value"
+
+def nse_most_active(type="securities",sort="value"):
+    payload = nsefetch("https://www.nseindia.com/api/live-analysis-most-active-"+type+"?index="+sort+"")
+    payload = pd.DataFrame(payload["data"])
+    return payload
