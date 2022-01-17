@@ -7,7 +7,7 @@
 #### NSEPython is a Python library to get publicly available data on the current [NSEIndia](nseindia.com)  site by communicating with their REST APIs.
 
 <p align="left">
-  <a href="https://aeron7.github.io/nsepython/" target="_blank">
+  <a href="https://unofficed.com/nse-python/documentation/" target="_blank">
     <img width="200" src="https://github.com/aeron7/nsepython/blob/master/button_read-the-documentation.png" alt="logo">
   </a>
 </p>
