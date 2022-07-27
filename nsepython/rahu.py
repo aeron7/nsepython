@@ -191,7 +191,7 @@ def nse_quote_ltp(symbol,expiryDate="latest",optionType="-",strikePrice=0):
     if(expiryDate=="next"): expiryDate=dates[1]
 
   if(expiryDate=="latest") or (expiryDate=="next"):
-    dates=list(set((payload["expiryDates"])))
+    dates=list(set((payload["records"]["expiryDates"])))
     dates.sort(key = lambda date: datetime.datetime.strptime(date, '%d-%b-%Y'))
     if(expiryDate=="latest"): expiryDate=dates[0]
     if(expiryDate=="next"): expiryDate=dates[1]
