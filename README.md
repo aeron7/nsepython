@@ -32,6 +32,8 @@ They were both unmaintained since long time.
 
 [ How to find the beta of Indian stocks using Python?](https://unofficed.com/how-to-find-the-beta-of-indian-stocks-using-python/)
 
+[How to get Historical PE, PB and Dividend Ratio of any index using Python](https://unofficed.com/nse-python/documentation/nsepy/#index_pe_pb_div)
+
 ## Contributing
 For Discussion and Improving this Code, Join - https://www.unofficed.com/chat/
 
