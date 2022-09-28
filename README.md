@@ -4,7 +4,7 @@
   </a>
 </p>
 
-#### NSEPython is a Python library to get publicly available data on the current [NSEIndia](https://nseindia.com) as well as [NIFTY Indices](https://www.niftyindices.com/) site by communicating with their REST APIs.
+#### NSEPython is a Python library to get publicly available data on the current [NSEIndia](https://nseindia.com) and [NIFTY Indices](https://www.niftyindices.com/) site by communicating with their REST APIs.
 
 <p align="left">
   <a href="https://unofficed.com/nse-python/documentation/" target="_blank">
@@ -12,8 +12,8 @@
   </a>
 </p>
 
-NSE Historical Data is also available using NSEPython. <br/>
-The functions are in beta phase. I will update them shortly. <br/>
+The library gets constant updates based on feedbacks. <br/>
+So many of the functions are in beta phase. <br/>
 But to see all beta functions You can see - [https://forum.unofficed.com/t/nsepython-documentation/376/107](https://forum.unofficed.com/t/nsepython-documentation/376/107)
 
 ## Installation
