@@ -24,10 +24,12 @@ Use the package manager [pip](https://pypi.org/project/nsepython/) to install ns
 pip install nsepython
 ```
 ## Cross Library Migration
-All the functions of the two famous packages NsepY and NSETools are also migrated here with same function name. They were both unmaintained since long time.
+All the functions of the two famous packages NsepY and NSETools are also migrated here with same function name. <br/>
+They were both unmaintained since long time.
 
 ## Advanced Usecases 
 [Calculate any Option Greek using Black Scholes Formula in Python](https://unofficed.com/black-scholes-formula-in-python/)
+
 [ How to find the beta of Indian stocks using Python?](https://unofficed.com/how-to-find-the-beta-of-indian-stocks-using-python/)
 
 ## Contributing
