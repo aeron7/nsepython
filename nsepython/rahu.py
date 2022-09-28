@@ -158,7 +158,7 @@ def nse_quote(symbol):
         payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol)
     return payload
 
-def nse_expirydetails(payload,i='0'):
+def nse_expirydetails(payload,i=0):
     currentExpiry = payload['records']['expiryDates'][i]
     currentExpiry = datetime.datetime.strptime(currentExpiry,'%d-%b-%Y').date()  # converting json datetime to alice datetime
     date_today = run_time.strftime('%Y-%m-%d')  # required to remove hh:mm:ss
