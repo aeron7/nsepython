@@ -12,9 +12,7 @@
   </a>
 </p>
 
-The library gets constant updates based on feedbacks. <br/>
-So many of the functions are in beta phase. <br/>
-But to see all beta functions You can see - [https://forum.unofficed.com/t/nsepython-documentation/376/107](https://forum.unofficed.com/t/nsepython-documentation/376/107)
+For Support and Beta Functions - [https://forum.unofficed.com/t/nsepython-documentation/376/107](https://forum.unofficed.com/t/nsepython-documentation/376/107)
 
 ## Installation
 

@@ -10,47 +10,53 @@ import datetime,time
 import logging
 import re
 
+
 mode ='local'
 
-if(mode=='local'):
-
-    headers = {
-        'Connection': 'keep-alive',
-        'Cache-Control': 'max-age=0',
-        'DNT': '1',
-        'Upgrade-Insecure-Requests': '1',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.79 Safari/537.36',
-        'Sec-Fetch-User': '?1',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-Mode': 'navigate',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
-    }
-
+if(mode=='vpn'):
     def nsefetch(payload):
+        if (("%26" in payload) or ("%20" in payload)):
+            encoded_url = payload
+        else:
+            encoded_url = urllib.parse.quote(payload, safe=':/?&=')
+        payload_var = 'curl -b cookies.txt "' + encoded_url + '"' + curl_headers + ''
         try:
-            output = requests.get(payload,headers=headers).json()
-            #print(output)
-        except ValueError:
-            s =requests.Session()
-            output = s.get("http://nseindia.com",headers=headers)
-            output = s.get(payload,headers=headers).json()
+            output = os.popen(payload_var).read()
+            output=json.loads(output)
+        except ValueError:  # includes simplejson.decoder.JSONDecodeError:
+            payload2 = "https://www.nseindia.com"
+            output2 = os.popen('curl -c cookies.txt "'+payload2+'"'+curl_headers+'').read()
+    
+            output = os.popen(payload_var).read()
+            output=json.loads(output)
         return output
+if(mode=='local'):
+    def nsefetch(payload):
+        output = requests.get(payload,headers=headers).json()
+        return output
+
+
+headers = {
+    'Connection': 'keep-alive',
+    'Cache-Control': 'max-age=0',
+    'DNT': '1',
+    'Upgrade-Insecure-Requests': '1',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.79 Safari/537.36',
+    'Sec-Fetch-User': '?1',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-Mode': 'navigate',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
+}
+
+#Curl headers
+curl_headers = ''' -H "authority: beta.nseindia.com" -H "cache-control: max-age=0" -H "dnt: 1" -H "upgrade-insecure-requests: 1" -H "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.117 Safari/537.36" -H "sec-fetch-user: ?1" -H "accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9" -H "sec-fetch-site: none" -H "sec-fetch-mode: navigate" -H "accept-encoding: gzip, deflate, br" -H "accept-language: en-US,en;q=0.9,hi;q=0.8" --compressed'''
 
 run_time=datetime.datetime.now()
 
 #Constants
 indices = ['NIFTY','FINNIFTY','BANKNIFTY']
-
-
-
-
-
-
-
-
-
 
 def running_status():
     start_now=datetime.datetime.now().replace(hour=9, minute=15, second=0, microsecond=0)
@@ -85,7 +91,7 @@ def nse_optionchain_scrapper(symbol):
     return payload
 
 
-def oi_chain_builder (symbol,expiry="latest",oi_mode="full"):
+def oi_chain_builder(symbol,expiry="latest",oi_mode="full"):
 
     payload = nse_optionchain_scrapper(symbol)
 
@@ -144,19 +150,31 @@ def oi_chain_builder (symbol,expiry="latest",oi_mode="full"):
 
             if(oi_mode=='full'):
                 oi_row['CALLS_Chart'],oi_row['PUTS_Chart']=0,0
-            oi_data = oi_data.append(oi_row, ignore_index=True)
+            #oi_data = oi_data.append(oi_row, ignore_index=True)
+            #oi_data = pd.concat([oi_data, oi_row], ignore_index=True)
+            oi_data = pd.concat([oi_data, pd.DataFrame([oi_row])], ignore_index=True)
 
+
+
+            oi_data['time_stamp']=payload['records']['timestamp']
     return oi_data,float(payload['records']['underlyingValue']),payload['records']['timestamp']
 
 
-def nse_quote(symbol):
+def nse_quote(symbol,section=""):
+    #https://forum.unofficed.com/t/nsetools-get-quote-is-not-fetching-delivery-data-and-delivery-can-you-include-this-as-part-of-feature-request/1115/4    
     symbol = nsesymbolpurify(symbol)
 
-    if any(x in symbol for x in fnolist()):
-        payload = nsefetch('https://www.nseindia.com/api/quote-derivative?symbol='+symbol)
-    else:
-        payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol)
-    return payload
+    if(section==""):
+        if any(x in symbol for x in fnolist()):
+            payload = nsefetch('https://www.nseindia.com/api/quote-derivative?symbol='+symbol)
+        else:
+            payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol)
+        return payload
+    
+    if(section!=""):
+        payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol+'&section='+section)            
+        return payload
+
 
 def nse_expirydetails(payload,i=0):
     currentExpiry = payload['records']['expiryDates'][i]
@@ -510,7 +528,9 @@ def black_scholes_dexter(S0,X,t,σ="",r=10,q=0.0,td=365):
   return call_theta,put_theta,call_premium,put_premium,call_delta,put_delta,gamma,vega,call_rho,put_rho
 
 def equity_history_virgin(symbol,series,start_date,end_date):
-    url="https://www.nseindia.com/api/historical/cm/equity?symbol="+symbol+"&series=[%22"+series+"%22]&from="+str(start_date)+"&to="+str(end_date)+""
+    #url="https://www.nseindia.com/api/historical/cm/equity?symbol="+symbol+"&series=[%22"+series+"%22]&from="+str(start_date)+"&to="+str(end_date)+""
+    url = 'https://www.nseindia.com/api/historical/cm/equity?symbol=' + symbol + '&series=["' + series + '"]&from=' + start_date + '&to=' + end_date
+
     payload = nsefetch(url)
     return pd.DataFrame.from_records(payload["data"])
 
@@ -541,7 +561,10 @@ def equity_history(symbol,series,start_date,end_date):
         logging.info("Ending Date: "+str(temp_date))
         logging.info("====")
 
-        total=total.append(equity_history_virgin(symbol,series,start_date,temp_date))
+        #total=total.append(equity_history_virgin(symbol,series,start_date,temp_date))
+        #total=total.concat(equity_history_virgin(symbol,series,start_date,temp_date))
+        total = pd.concat([total, equity_history_virgin(symbol, series, start_date, temp_date)])
+
 
         logging.info("Length of the Table: "+ str(len(total)))
 
@@ -558,7 +581,10 @@ def equity_history(symbol,series,start_date,end_date):
     logging.info("Ending Date: "+str(end_date))
     logging.info("====")
 
-    total=total.append(equity_history_virgin(symbol,series,start_date,end_date))
+    #total=total.append(equity_history_virgin(symbol,series,start_date,end_date))
+    #total=total.concat(equity_history_virgin(symbol,series,start_date,end_date))
+    total = pd.concat([total, equity_history_virgin(symbol, series, start_date, end_date)])
+
 
     logging.info("Finale")
     logging.info("Length of the Total Dataset: "+ str(len(total)))
@@ -582,6 +608,7 @@ def derivative_history_virgin(symbol,start_date,end_date,instrumentType,expiry_d
 
     nsefetch_url = "https://www.nseindia.com/api/historical/fo/derivatives?&from="+str(start_date)+"&to="+str(end_date)+"&optionType="+optionType+"&strikePrice="+strikePrice+"&expiryDate="+expiry_date+"&instrumentType="+instrumentType+"&symbol="+symbol+""
     payload = nsefetch(nsefetch_url)
+    logging.info(nsefetch_url)
     logging.info(payload)
     return pd.DataFrame.from_records(payload["data"])
 
@@ -611,7 +638,10 @@ def derivative_history(symbol,start_date,end_date,instrumentType,expiry_date,str
         logging.info("Ending Date: "+str(temp_date))
         logging.info("====")
 
-        total=total.append(derivative_history_virgin(symbol,start_date,temp_date,instrumentType,expiry_date,strikePrice,optionType))
+        #total=total.append(derivative_history_virgin(symbol,start_date,temp_date,instrumentType,expiry_date,strikePrice,optionType))
+        #total=total.concat([total, derivative_history_virgin(symbol,start_date,temp_date,instrumentType,expiry_date,strikePrice,optionType)])
+        total = pd.concat([total, derivative_history_virgin(symbol, start_date, temp_date, instrumentType, expiry_date, strikePrice, optionType)])
+
 
         logging.info("Length of the Table: "+ str(len(total)))
 
@@ -628,7 +658,11 @@ def derivative_history(symbol,start_date,end_date,instrumentType,expiry_date,str
     logging.info("Ending Date: "+str(end_date))
     logging.info("====")
 
-    total=total.append(derivative_history_virgin(symbol,start_date,end_date,instrumentType,expiry_date,strikePrice,optionType))
+    #total=total.append(derivative_history_virgin(symbol,start_date,end_date,instrumentType,expiry_date,strikePrice,optionType))
+    #total = total.concat([total, derivative_history_virgin(symbol,start_date,end_date,instrumentType,expiry_date,strikePrice,optionType)])
+    total = pd.concat([total, derivative_history_virgin(symbol, start_date, end_date, instrumentType, expiry_date, strikePrice, optionType)])
+
+
 
     logging.info("Finale")
     logging.info("Length of the Total Dataset: "+ str(len(total)))
@@ -770,3 +804,6 @@ def nse_most_active(type="securities",sort="value"):
     payload = nsefetch("https://www.nseindia.com/api/live-analysis-most-active-"+type+"?index="+sort+"")
     payload = pd.DataFrame(payload["data"])
     return payload
+
+
+def nse_eq_symbols():
