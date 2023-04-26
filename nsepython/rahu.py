@@ -807,3 +807,6 @@ def nse_most_active(type="securities",sort="value"):
 
 
 def nse_eq_symbols():
+    #https://forum.unofficed.com/t/feature-request-stocklist-api/1073/11
+    eq_list_pd = pd.read_csv('https://archives.nseindia.com/content/equities/EQUITY_L.csv')
+    return eq_list_pd['SYMBOL'].tolist()
