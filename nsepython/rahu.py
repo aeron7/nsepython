@@ -9,7 +9,7 @@ import random
 import datetime,time
 import logging
 import re
-
+import urllib.parse
 
 mode ='local'
 
@@ -144,7 +144,7 @@ def oi_chain_builder(symbol,expiry="latest",oi_mode="full"):
 
 
 def nse_quote(symbol,section=""):
-    #https://forum.unofficed.com/t/nsetools-get-quote-is-not-fetching-delivery-data-and-delivery-can-you-include-this-as-part-of-feature-request/1115/4    
+    #https://forum.unofficed.com/t/nsetools-get-quote-is-not-fetching-delivery-data-and-delivery-can-you-include-this-as-part-of-feature-request/1115/4
     symbol = nsesymbolpurify(symbol)
 
     if(section==""):
@@ -153,9 +153,9 @@ def nse_quote(symbol,section=""):
         else:
             payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol)
         return payload
-    
+
     if(section!=""):
-        payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol+'&section='+section)            
+        payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol+'&section='+section)
         return payload
 
 
