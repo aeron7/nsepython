@@ -57,3 +57,20 @@ FULL_OI_MODE_COLUMN_NAMES: list[str] = [
     "PUTS_OI",
     "PUTS_Chart",
 ]
+
+NIFTY_INDICIES_HEADERS: dict[str, str] = {
+    "Connection": "keep-alive",
+    "sec-ch-ua": '" Not;A Brand";v="99", "Google Chrome";v="91", "Chromium";v="91"',
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "DNT": "1",
+    "X-Requested-With": "XMLHttpRequest",
+    "sec-ch-ua-mobile": "?0",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36",
+    "Content-Type": "application/json; charset=UTF-8",
+    "Origin": "https://niftyindices.com",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Dest": "empty",
+    "Referer": "https://niftyindices.com/reports/historical-data",
+    "Accept-Language": "en-US,en;q=0.9,hi;q=0.8",
+}
