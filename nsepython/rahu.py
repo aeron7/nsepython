@@ -996,7 +996,9 @@ def get_beta(symbol: str, days: int = 365, symbol2: str = "NIFTY 50") -> float:
     symbol_daily_change = symbol_df["daily_change"]
     symbol2_daily_change = symbol2_df["daily_change"]
 
+    # TODO: is this ok, or should the older version be used?
     # since x & y are pandas series, we get builtin cov() & var() functions
+    # both give the same values of beta
     covariance = symbol_daily_change.cov(symbol2_daily_change)
     variance = symbol2_daily_change.var()
 
