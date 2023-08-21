@@ -13,9 +13,38 @@ import urllib.parse
 
 mode ='local'
 
+if(mode=='vpn'):
+    def nsefetch(payload):
+        if (("%26" in payload) or ("%20" in payload)):
+            encoded_url = payload
+        else:
+            encoded_url = urllib.parse.quote(payload, safe=':/?&=')
+        payload_var = 'curl -b cookies.txt "' + encoded_url + '"' + curl_headers + ''
+        try:
+            output = os.popen(payload_var).read()
+            output=json.loads(output)
+        except ValueError:  # includes simplejson.decoder.JSONDecodeError:
+            payload2 = "https://www.nseindia.com"
+            output2 = os.popen('curl -c cookies.txt "'+payload2+'"'+curl_headers+'').read()
+    
+            output = os.popen(payload_var).read()
+            output=json.loads(output)
+        return output
 if(mode=='local'):
     def nsefetch(payload):
-        output = requests.get(payload,headers=headers).json()
+        try: #Try the normal way.
+            output = requests.get(payload,headers=headers).json()
+        except: 
+            try: # Follow Praty's hack as mentioned here at https://forum.unofficed.com/t/solution-equity-history-function-doesnt-work/1197
+                output = requests.session().get(payload,headers=headers).json()
+
+            except: #Mimick FrontPage Visit
+                s=requests.session()
+
+                payload2 = "https://www.nseindia.com"
+                output2 = requests.get(payload2,headers=headers).json()
+
+                output = requests.get(payload,headers=headers).json()
         return output
 
 
