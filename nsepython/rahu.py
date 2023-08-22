@@ -822,3 +822,10 @@ def nse_eq_symbols():
     #https://forum.unofficed.com/t/feature-request-stocklist-api/1073/11
     eq_list_pd = pd.read_csv('https://archives.nseindia.com/content/equities/EQUITY_L.csv')
     return eq_list_pd['SYMBOL'].tolist()
+
+def nse_price_band_hitters(bandtype="both",view="AllSec"):
+  payload = nsefetch("https://www.nseindia.com/api/live-analysis-price-band-hitter")
+  
+  #bandtype can be upper, lower, both
+  #view can be AllSec,SecGtr20,SecLwr20
+  return pd.DataFrame(payload[bandtype][view]["data"])

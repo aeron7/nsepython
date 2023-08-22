@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 setuptools.setup(
     name = 'nsepython',
     packages=setuptools.find_packages(),
-    version = '1.8',
+    version = '1.9',
     include_package_data=True,
     description = 'Python library for NSE India APIs',
     long_description=long_description,
