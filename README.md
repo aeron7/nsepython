@@ -69,6 +69,15 @@ All the functions from the two renowned packages, NsepY and NSETools, have been 
 - [Coding Heatmap Opening Range Breakout Strategy in Python – Part 1](https://unofficed.com/courses/designing-an-index-fund-from-scratch-in-indian-share-market/lessons/opening-range-breakout-python-part-i/)
 - [Coding Heatmap Opening Range Breakout Strategy in Python – Part 2](https://unofficed.com/courses/designing-an-index-fund-from-scratch-in-indian-share-market/lessons/opening-range-breakout-python-part-ii/)
 
+### Markov Chain
+
+- [Stochastic Modeling in Stock Market](https://unofficed.com/courses/markov-model-application-of-markov-chain-in-stock-market/lessons/stochastic-modeling-in-stock-market/)
+- [Application of Markov Chains in Stock Market](https://unofficed.com/courses/markov-model-application-of-markov-chain-in-stock-market/lessons/application-of-markov-chains-in-stock-market/)
+- [Markov Chains in Stock Market Using Python – Getting Transition Matrix​](https://unofficed.com/courses/markov-model-application-of-markov-chain-in-stock-market/lessons/markov-chains-in-stock-market-using-python-getting-transition-matrix/)
+- [How to do Random Walk using NSEPython in Indian Stock Market](https://unofficed.com/courses/markov-model-application-of-markov-chain-in-stock-market/lessons/how-to-do-random-walk-using-nsepython-in-indian-stock-market/)
+- [Markov Chain and Linear Algebra – Calculation of Stationary Distribution using Python​](https://unofficed.com/courses/markov-model-application-of-markov-chain-in-stock-market/lessons/markov-chain-and-linear-algebra-calculation-of-stationary-distribution-using-python/)
+- [Find the Equilibrium Matrix in Markov Chain using Python in Indian Stock Market](https://unofficed.com/courses/markov-model-application-of-markov-chain-in-stock-market/lessons/find-the-equilibrium-matrix-in-markov-chain-using-python-in-stock-market/)
+
 
 ## Leverage
 
