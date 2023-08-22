@@ -829,3 +829,32 @@ def nse_price_band_hitters(bandtype="both",view="AllSec"):
   #bandtype can be upper, lower, both
   #view can be AllSec,SecGtr20,SecLwr20
   return pd.DataFrame(payload[bandtype][view]["data"])
+
+def nse_largedeals(mode="bulk_deals"):
+  payload = nsefetch('https://www.nseindia.com/api/snapshot-capital-market-largedeal')
+  if(mode=="bulk_deals"):
+    return pd.DataFrame(payload["BULK_DEALS_DATA"])
+  if(mode=="short_deals"):
+    return pd.DataFrame(payload["SHORT_DEALS_DATA"])
+  if(mode=="block_deals"):
+    return pd.DataFrame(payload["BLOCK_DEALS_DATA"])
+  
+def nse_largedeals_historical(from_date, to_date, mode="bulk_deals"):
+    if mode == "bulk_deals":
+        mode = "bulk-deals"
+    elif mode == "short_deals":
+        mode = "short-selling"
+    elif mode == "block_deals":
+        mode = "block-deals"
+    
+    url='https://www.nseindia.com/api/historical/' + mode + '?from=' + from_date + '&to=' + to_date
+    logging.info("Fetching " + str(url))
+    payload = nsefetch(url)
+    return pd.DataFrame(payload["data"])
+
+#https://forum.unofficed.com/t/feature-request-nse-fno-participant-wise-oi/1179/7
+#print(get_fao_participant_oi("04-06-2021"))
+def get_fao_participant_oi(date):
+    date = date.replace("-","")
+    payload=pd.read_csv("https://archives.nseindia.com/content/nsccl/fao_participant_oi_"+date+".csv")
+    return payload
