@@ -42,9 +42,9 @@ if(mode=='local'):
                 s=requests.session()
 
                 payload2 = "https://www.nseindia.com"
-                output2 = requests.get(payload2,headers=headers).json()
+                output2 = s.get(payload2,headers=headers).json()
 
-                output = requests.get(payload,headers=headers).json()
+                output = s.get(payload,headers=headers).json()
         return output
 
 
