@@ -858,3 +858,20 @@ def get_fao_participant_oi(date):
     date = date.replace("-","")
     payload=pd.read_csv("https://archives.nseindia.com/content/nsccl/fao_participant_oi_"+date+".csv")
     return payload
+
+#https://forum.unofficed.com/t/how-to-check-if-the-market-is-open-today-or-not/1268/1
+def is_market_open(segment = "FO"): #COM,CD,CB,CMOT,COM,FO,IRD,MF,NDM,NTRP,SLBS
+    
+    holiday_json = nse_holidays()[segment]
+
+    # Get today's date in the format 'dd-Mon-yyyy'
+    today_date = datetime.date.today().strftime('%d-%b-%Y')
+
+    # Check if today's date is in the holiday_json
+    for holiday in holiday_json:
+        if holiday['tradingDate'] != today_date:
+            print("FNO Market is open today. Have a Nice Trade!")
+            return True
+        if holiday['tradingDate'] == today_date:
+            print(f"Market is closed today because of {holiday['description']}")
+            return False
