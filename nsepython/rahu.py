@@ -188,8 +188,12 @@ def nse_quote(symbol,section=""):
         return payload
 
 
-def nse_expirydetails(payload,i=0):
-    currentExpiry = payload['records']['expiryDates'][i]
+def nse_expirydetails(payload,i=0): #Can make problem. Use nse_expirydetails_by_symbol()
+
+    expiry_dates = payload['records']['expiryDates']
+    expiry_dates = [datetime.datetime.strptime(date, "%d-%b-%Y") for date in expiry_dates]
+    expiry_dates = [date.strftime("%d-%b-%Y") for date in expiry_dates if date >= datetime.datetime.now()]
+    currentExpiry=expiry_dates[i]    
     currentExpiry = datetime.datetime.strptime(currentExpiry,'%d-%b-%Y').date()  # converting json datetime to alice datetime
     date_today = run_time.strftime('%Y-%m-%d')  # required to remove hh:mm:ss
     date_today = datetime.datetime.strptime(date_today,'%Y-%m-%d').date()
@@ -220,14 +224,16 @@ def nse_quote_ltp(symbol,expiryDate="latest",optionType="-",strikePrice=0):
 
   if(expiryDate=="latest") or (expiryDate=="next"):
 
-    print(payload["expiryDatesByInstrument"]["Index Futures"][0])
     if(meta=="Futures"):
       selected_key = next((key for key in payload["expiryDatesByInstrument"] if "futures" in key.lower()), None)
     if(meta=="Options"):
       selected_key = next((key for key in payload["expiryDatesByInstrument"] if "options" in key.lower()), None)
 
-    if(expiryDate=="latest"): expiryDate=payload["expiryDatesByInstrument"][selected_key][0]
-    if(expiryDate=="next"): expiryDate=payload["expiryDatesByInstrument"][selected_key][1]
+    expiry_dates=payload["expiryDatesByInstrument"][selected_key]
+    expiry_dates = [datetime.datetime.strptime(date, "%d-%b-%Y") for date in expiry_dates]
+    expiry_dates = [date.strftime("%d-%b-%Y") for date in expiry_dates if date >= datetime.datetime.now()]
+    if(expiryDate=="latest"): expiryDate=expiry_dates[0]
+    if(expiryDate=="next"): expiryDate=expiry_dates[1]
   
 
   if(optionType!="-"):
@@ -304,7 +310,10 @@ def nse_quote_meta(symbol,expiryDate="latest",optionType="-",strikePrice=0):
   return metadata
 
 def nse_optionchain_ltp(payload,strikePrice,optionType,inp=0,intent=""):
-    expiryDate=payload['records']['expiryDates'][inp]
+    expiry_dates = payload['records']['expiryDates']
+    expiry_dates = [datetime.datetime.strptime(date, "%d-%b-%Y") for date in expiry_dates]
+    expiry_dates = [date.strftime("%d-%b-%Y") for date in expiry_dates if date >= datetime.datetime.now()]
+    expiryDate=expiry_dates[inp]
     for x in range(len(payload['records']['data'])):
       if((payload['records']['data'][x]['strikePrice']==strikePrice) & (payload['records']['data'][x]['expiryDate']==expiryDate)):
           if(intent==""): return payload['records']['data'][x][optionType]['lastPrice']
@@ -874,3 +883,20 @@ def is_market_open(segment = "FO"): #COM,CD,CB,CMOT,COM,FO,IRD,MF,NDM,NTRP,SLBS
         if holiday['tradingDate'] == today_date:
             print(f"Market is closed today because of {holiday['description']}")
             return False
+
+def nse_expirydetails_by_symbol(symbol,meta ="Futures",i=0):
+    payload = nse_quote(symbol)
+
+    if(meta=="Futures"):
+      selected_key = next((key for key in payload["expiryDatesByInstrument"] if "futures" in key.lower()), None)
+    if(meta=="Options"):
+      selected_key = next((key for key in payload["expiryDatesByInstrument"] if "options" in key.lower()), None)
+
+    expiry_dates=payload["expiryDatesByInstrument"][selected_key]
+    expiry_dates = [datetime.datetime.strptime(date, "%d-%b-%Y") for date in expiry_dates]
+    expiry_dates = [date.strftime("%d-%b-%Y") for date in expiry_dates if date >= datetime.datetime.now()]
+    
+    currentExpiry=expiry_dates[i]
+    currentExpiry = datetime.datetime.strptime(currentExpiry,'%d-%b-%Y').date()    
+    dte = (currentExpiry - datetime.datetime.now().date()).days
+    return currentExpiry,dte
