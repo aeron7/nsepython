@@ -191,8 +191,8 @@ def nse_quote(symbol,section=""):
 def nse_expirydetails(payload,i=0): #Can make problem. Use nse_expirydetails_by_symbol()
 
     expiry_dates = payload['records']['expiryDates']
-    expiry_dates = [datetime.datetime.strptime(date, "%d-%b-%Y") for date in expiry_dates]
-    expiry_dates = [date.strftime("%d-%b-%Y") for date in expiry_dates if date >= datetime.datetime.now()]
+    expiry_dates = [datetime.datetime.strptime(date, "%d-%b-%Y").date() for date in expiry_dates]
+    expiry_dates = [date.strftime("%d-%b-%Y") for date in expiry_dates if date >= datetime.datetime.now().date()]
     currentExpiry=expiry_dates[i]    
     currentExpiry = datetime.datetime.strptime(currentExpiry,'%d-%b-%Y').date()  # converting json datetime to alice datetime
     date_today = run_time.strftime('%Y-%m-%d')  # required to remove hh:mm:ss
@@ -230,8 +230,8 @@ def nse_quote_ltp(symbol,expiryDate="latest",optionType="-",strikePrice=0):
       selected_key = next((key for key in payload["expiryDatesByInstrument"] if "options" in key.lower()), None)
 
     expiry_dates=payload["expiryDatesByInstrument"][selected_key]
-    expiry_dates = [datetime.datetime.strptime(date, "%d-%b-%Y") for date in expiry_dates]
-    expiry_dates = [date.strftime("%d-%b-%Y") for date in expiry_dates if date >= datetime.datetime.now()]
+    expiry_dates = [datetime.datetime.strptime(date, "%d-%b-%Y").date() for date in expiry_dates]
+    expiry_dates = [date.strftime("%d-%b-%Y") for date in expiry_dates if date >= datetime.datetime.now().date()]
     if(expiryDate=="latest"): expiryDate=expiry_dates[0]
     if(expiryDate=="next"): expiryDate=expiry_dates[1]
   
@@ -311,8 +311,8 @@ def nse_quote_meta(symbol,expiryDate="latest",optionType="-",strikePrice=0):
 
 def nse_optionchain_ltp(payload,strikePrice,optionType,inp=0,intent=""):
     expiry_dates = payload['records']['expiryDates']
-    expiry_dates = [datetime.datetime.strptime(date, "%d-%b-%Y") for date in expiry_dates]
-    expiry_dates = [date.strftime("%d-%b-%Y") for date in expiry_dates if date >= datetime.datetime.now()]
+    expiry_dates = [datetime.datetime.strptime(date, "%d-%b-%Y").date() for date in expiry_dates]
+    expiry_dates = [date.strftime("%d-%b-%Y") for date in expiry_dates if date >= datetime.datetime.now().date()]
     expiryDate=expiry_dates[inp]
     for x in range(len(payload['records']['data'])):
       if((payload['records']['data'][x]['strikePrice']==strikePrice) & (payload['records']['data'][x]['expiryDate']==expiryDate)):
@@ -893,8 +893,8 @@ def nse_expirydetails_by_symbol(symbol,meta ="Futures",i=0):
       selected_key = next((key for key in payload["expiryDatesByInstrument"] if "options" in key.lower()), None)
 
     expiry_dates=payload["expiryDatesByInstrument"][selected_key]
-    expiry_dates = [datetime.datetime.strptime(date, "%d-%b-%Y") for date in expiry_dates]
-    expiry_dates = [date.strftime("%d-%b-%Y") for date in expiry_dates if date >= datetime.datetime.now()]
+    expiry_dates = [datetime.datetime.strptime(date, "%d-%b-%Y").date() for date in expiry_dates]
+    expiry_dates = [date.strftime("%d-%b-%Y") for date in expiry_dates if date >= datetime.datetime.now().date()]
     
     currentExpiry=expiry_dates[i]
     currentExpiry = datetime.datetime.strptime(currentExpiry,'%d-%b-%Y').date()    
