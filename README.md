@@ -1,6 +1,6 @@
 <p align="left">
   <a href="https://aeron7.github.io/nsepython/" target="_blank">
-    <img width="300" src="https://raw.githubusercontent.com/aeron7/nsepython/master/nsepython.png" alt="logo">
+    <img width="300" src="https://forum.unofficed.com/uploads/default/original/2X/1/146aad29b92adf82059eacba2feca24741c9f859.png" alt="logo">
   </a>
 </p>
 
@@ -8,7 +8,7 @@
 
 <p align="left">
   <a href="https://unofficed.com/nse-python/documentation/" target="_blank">
-    <img width="200" src="https://raw.githubusercontent.com/aeron7/nsepython/master/button_read-the-documentation.png" alt="logo">
+    <img width="200" src="https://forum.unofficed.com/uploads/default/original/2X/6/6b62554e8dc05701dab74b41e681e8b361e0f37f.png" alt="logo">
   </a>
 </p>
 
