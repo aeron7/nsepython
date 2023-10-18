@@ -33,6 +33,11 @@ if(mode=='vpn'):
 if(mode=='local'):
     def nsefetch(payload):
         try: #Try the normal way.
+            cookies = get_cookies_from_nse()
+            headerCookies = ""
+            for cookie in cookies:
+                headerCookies += f"{cookie.name}={cookie.value};"
+            headers['Cookie'] = headerCookies
             output = requests.get(payload,headers=headers).json()
         except: 
             try: # Follow Praty's hack as mentioned here at https://forum.unofficed.com/t/solution-equity-history-function-doesnt-work/1197
@@ -62,6 +67,14 @@ headers = {
     'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
 }
 
+def get_cookies_from_nse():
+    try:
+        url = "https://www.nseindia.com/"  # Replace with your desired URL
+        response = requests.get(url, headers=headers)
+        return response.cookies
+    except:
+        # print(f"Error while fetching cookies: {e}")
+        return None
 #Curl headers
 curl_headers = ''' -H "authority: beta.nseindia.com" -H "cache-control: max-age=0" -H "dnt: 1" -H "upgrade-insecure-requests: 1" -H "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.117 Safari/537.36" -H "sec-fetch-user: ?1" -H "accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9" -H "sec-fetch-site: none" -H "sec-fetch-mode: navigate" -H "accept-encoding: gzip, deflate, br" -H "accept-language: en-US,en;q=0.9,hi;q=0.8" --compressed'''
 
