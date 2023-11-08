@@ -39,12 +39,10 @@ if(mode=='local'):
                 output = requests.session().get(payload,headers=headers).json()
 
             except: #Mimick FrontPage Visit
-                s=requests.session()
-
+                s = requests.session()
                 payload2 = "https://www.nseindia.com"
-                output2 = s.get(payload2,headers=headers).json()
-
-                output = s.get(payload,headers=headers).json()
+                response = s.get(payload2, headers=headers)
+                output = s.get(payload, headers=headers).json()
         return output
 
 
