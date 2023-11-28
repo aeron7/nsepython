@@ -32,19 +32,13 @@ if(mode=='vpn'):
         return output
 if(mode=='local'):
     def nsefetch(payload):
-        try: #Try the normal way.
+        try:
             output = requests.get(payload,headers=headers).json()
-        except: 
-            try: # Follow Praty's hack as mentioned here at https://forum.unofficed.com/t/solution-equity-history-function-doesnt-work/1197
-                output = requests.session().get(payload,headers=headers).json()
-
-            except: #Mimick FrontPage Visit
-                s=requests.session()
-
-                payload2 = "https://www.nseindia.com"
-                output2 = s.get(payload2,headers=headers).json()
-
-                output = s.get(payload,headers=headers).json()
+            print(output)
+        except ValueError:
+            s =requests.Session()
+            output = s.get("http://nseindia.com",headers=headers)
+            output = s.get(payload,headers=headers).json()
         return output
 
 
@@ -616,13 +610,16 @@ def derivative_history_virgin(symbol,start_date,end_date,instrumentType,expiry_d
     instrumentType = instrumentType.lower()
 
     if(instrumentType=="options"):
-        if("NIFTY" in symbol): instrumentType="FUTSTK"
         instrumentType="OPTSTK"
-    if(instrumentType=="futures"):
         if("NIFTY" in symbol): instrumentType="OPTIDX"
-        instrumentType="FUTIDX"
+        
+    if(instrumentType=="futures"):
+        instrumentType="FUTSTK"
+        if("NIFTY" in symbol): instrumentType="FUTIDX"
+        
 
-    if(((instrumentType=="OPTIDX")or (instrumentType=="OPTSTK")) and (expiry_date!="")):
+    #if(((instrumentType=="OPTIDX")or (instrumentType=="OPTSTK")) and (expiry_date!="")):
+    if(strikePrice!=""):
         strikePrice = "%.2f" % strikePrice
         strikePrice = str(strikePrice)
 
@@ -631,7 +628,6 @@ def derivative_history_virgin(symbol,start_date,end_date,instrumentType,expiry_d
     logging.info(nsefetch_url)
     logging.info(payload)
     return pd.DataFrame.from_records(payload["data"])
-
 def derivative_history(symbol,start_date,end_date,instrumentType,expiry_date,strikePrice="",optionType=""):
     #We are getting the input in text. So it is being converted to Datetime object from String.
     start_date = datetime.datetime.strptime(start_date, "%d-%m-%Y")
@@ -690,11 +686,41 @@ def derivative_history(symbol,start_date,end_date,instrumentType,expiry_date,str
     return payload
 
 
-def expiry_history(symbol,start_date="",end_date=""):
+def expiry_history(symbol,start_date="",end_date="",type="options"):
     if(end_date==""):end_date=end_date
     nsefetch_url = "https://www.nseindia.com/api/historical/fo/derivatives/meta?&from="+start_date+"&to="+end_date+"&symbol="+symbol+""
     payload = nsefetch(nsefetch_url)
-    return payload['data'][2]
+
+    print(payload)
+
+    for key, value in payload['expiryDatesByInstrument'].items():
+      if type.lower() == "options" and "OPT" in key:
+          payload_data = payload['expiryDatesByInstrument'][key]
+          break
+      elif type.lower() == "futures" and "FUT" in key:
+          payload_data =  payload['expiryDatesByInstrument'][key]
+          break
+    
+    # Convert start_date and end_date to datetime objects
+    start_date = datetime.datetime.strptime(start_date, "%d-%m-%Y")
+    end_date = datetime.datetime.strptime(end_date, "%d-%m-%Y")
+
+    # Initialize an empty list to store filtered dates
+    filtered_date_payload = []
+
+    # Initialize a flag to check if the first date after end_date has been added
+    added_after_end_date = False    
+
+    # Iterate through date_payload and filter dates within the range
+    for date_str in payload_data:
+        date_obj = datetime.datetime.strptime(date_str, "%d-%b-%Y")
+        if start_date <= date_obj <= end_date:
+            filtered_date_payload.append(date_str)
+        elif date_obj > end_date and not added_after_end_date:
+            filtered_date_payload.append(date_str)
+            added_after_end_date = True
+    
+    return filtered_date_payload
 
 # # Nifty Indicies Site
 
