@@ -1,4 +1,6 @@
 import os,sys
+import warnings
+warnings.simplefilter(action='ignore',category=FutureWarning)
 # os.chdir(os.path.dirname(os.path.abspath(__file__)))
 # sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
@@ -14,7 +16,7 @@ import urllib.parse
 mode ='local'
 
 if(mode=='vpn'):
-    def nsefetch(payload):
+    def nsefetch(payload,verbose=True):
         if (("%26" in payload) or ("%20" in payload)):
             encoded_url = payload
         else:
@@ -31,10 +33,11 @@ if(mode=='vpn'):
             output=json.loads(output)
         return output
 if(mode=='local'):
-    def nsefetch(payload):
+    def nsefetch(payload,verbose=True):
         try:
             output = requests.get(payload,headers=headers).json()
-            print(output)
+            if verbose:
+                print(output)
         except ValueError:
             s =requests.Session()
             output = s.get("http://nseindia.com",headers=headers)
@@ -64,17 +67,17 @@ run_time=datetime.datetime.now()
 #Constants
 indices = ['NIFTY','FINNIFTY','BANKNIFTY']
 
-def running_status():
+def running_status(verbose=True):
     start_now=datetime.datetime.now().replace(hour=9, minute=15, second=0, microsecond=0)
     end_now=datetime.datetime.now().replace(hour=15, minute=30, second=0, microsecond=0)
     return start_now<datetime.datetime.now()<end_now
 
 #Getting FNO Symboles
-def fnolist():
+def fnolist(verbose=True):
     # df = pd.read_csv("https://www1.nseindia.com/content/fo/fo_mktlots.csv")
     # return [x.strip(' ') for x in df.drop(df.index[3]).iloc[:,1].to_list()]
 
-    positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
+    positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O',verbose)
 
     nselist=['NIFTY','NIFTYIT','BANKNIFTY']
 
@@ -84,22 +87,22 @@ def fnolist():
 
     return nselist
 
-def nsesymbolpurify(symbol):
+def nsesymbolpurify(symbol,verbose=True):
     symbol = symbol.replace('&','%26') #URL Parse for Stocks Like M&M Finance
     return symbol
 
-def nse_optionchain_scrapper(symbol):
+def nse_optionchain_scrapper(symbol,verbose=True):
     symbol = nsesymbolpurify(symbol)
     if any(x in symbol for x in indices):
-        payload = nsefetch('https://www.nseindia.com/api/option-chain-indices?symbol='+symbol)
+        payload = nsefetch('https://www.nseindia.com/api/option-chain-indices?symbol='+symbol,verbose)
     else:
-        payload = nsefetch('https://www.nseindia.com/api/option-chain-equities?symbol='+symbol)
+        payload = nsefetch('https://www.nseindia.com/api/option-chain-equities?symbol='+symbol,verbose)
     return payload
 
 
-def oi_chain_builder(symbol,expiry="latest",oi_mode="full"):
+def oi_chain_builder(symbol,expiry="latest",oi_mode="full",verbose=True):
 
-    payload = nse_optionchain_scrapper(symbol)
+    payload = nse_optionchain_scrapper(symbol,verbose)
 
     if(oi_mode=='compact'):
         col_names = ['CALLS_OI','CALLS_Chng in OI','CALLS_Volume','CALLS_IV','CALLS_LTP','CALLS_Net Chng','Strike Price','PUTS_OI','PUTS_Chng in OI','PUTS_Volume','PUTS_IV','PUTS_LTP','PUTS_Net Chng']
@@ -166,23 +169,23 @@ def oi_chain_builder(symbol,expiry="latest",oi_mode="full"):
     return oi_data,float(payload['records']['underlyingValue']),payload['records']['timestamp']
 
 
-def nse_quote(symbol,section=""):
+def nse_quote(symbol,section="",verbose=True):
     #https://forum.unofficed.com/t/nsetools-get-quote-is-not-fetching-delivery-data-and-delivery-can-you-include-this-as-part-of-feature-request/1115/4
-    symbol = nsesymbolpurify(symbol)
+    symbol = nsesymbolpurify(symbol,verbose)
 
     if(section==""):
         if any(x in symbol for x in fnolist()):
-            payload = nsefetch('https://www.nseindia.com/api/quote-derivative?symbol='+symbol)
+            payload = nsefetch('https://www.nseindia.com/api/quote-derivative?symbol='+symbol,verbose)
         else:
-            payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol)
+            payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol,verbose)
         return payload
 
     if(section!=""):
-        payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol+'&section='+section)
+        payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol+'&section='+section,verbose)
         return payload
 
 
-def nse_expirydetails(payload,i=0): #Can make problem. Use nse_expirydetails_by_symbol()
+def nse_expirydetails(payload,i=0,verbose=True): #Can make problem. Use nse_expirydetails_by_symbol()
 
     expiry_dates = payload['records']['expiryDates']
     expiry_dates = [datetime.datetime.strptime(date, "%d-%b-%Y").date() for date in expiry_dates]
@@ -194,7 +197,7 @@ def nse_expirydetails(payload,i=0): #Can make problem. Use nse_expirydetails_by_
     dte = (currentExpiry - date_today).days
     return currentExpiry,dte
 
-def pcr(payload,inp='0'):
+def pcr(payload,inp='0',verbose=True):
     ce_oi = 0
     pe_oi = 0
     for i in payload['records']['data']:
@@ -208,8 +211,8 @@ def pcr(payload,inp='0'):
 
 #forum.unofficed.com/t/unable-to-find-nse-quote-meta-api/702/4
 #Refer https://forum.unofficed.com/t/changed-the-nse-quote-ltp-function/1276
-def nse_quote_ltp(symbol,expiryDate="latest",optionType="-",strikePrice=0):
-  payload = nse_quote(symbol)
+def nse_quote_ltp(symbol,expiryDate="latest",optionType="-",strikePrice=0,verbose=True):
+  payload = nse_quote(symbol,verbose=True)
 
   meta = "Options"
   if(optionType=="Fut"): meta = "Futures"
@@ -260,15 +263,15 @@ def nse_quote_ltp(symbol,expiryDate="latest",optionType="-",strikePrice=0):
 # print(nse_quote_ltp("RELIANCE","latest","PE",2300))
 # print(nse_quote_ltp("RELIANCE","next","PE",2300))
 
-def nse_quote_meta(symbol,expiryDate="latest",optionType="-",strikePrice=0):
-  payload = nse_quote(symbol)
+def nse_quote_meta(symbol,expiryDate="latest",optionType="-",strikePrice=0,verbose=True):
+  payload = nse_quote(symbol,verbose)
   #https://stackoverflow.com/questions/7961363/removing-duplicates-in-lists
   #https://stackoverflow.com/questions/19199984/sort-a-list-in-python
 
   #BankNIFTY and NIFTY has weekly options. Using this Jugaad which has primary base of assumption that Reliance will not step out of FNO.
   #forum.unofficed.com/t/unable-to-find-nse-quote-meta-api/702/4
   if((symbol in indices) and (optionType=="Fut")):
-    dates = expiry_list("RELIANCE","list")
+    dates = expiry_list("RELIANCE","list",verbose)
     if(expiryDate=="latest"): expiryDate=dates[0]
     if(expiryDate=="next"): expiryDate=dates[1]
 
@@ -303,7 +306,7 @@ def nse_quote_meta(symbol,expiryDate="latest",optionType="-",strikePrice=0):
 
   return metadata
 
-def nse_optionchain_ltp(payload,strikePrice,optionType,inp=0,intent=""):
+def nse_optionchain_ltp(payload,strikePrice,optionType,inp=0,intent="",verbose=True):
     expiry_dates = payload['records']['expiryDates']
     expiry_dates = [datetime.datetime.strptime(date, "%d-%b-%Y").date() for date in expiry_dates]
     expiry_dates = [date.strftime("%d-%b-%Y") for date in expiry_dates if date >= datetime.datetime.now().date()]
@@ -314,14 +317,14 @@ def nse_optionchain_ltp(payload,strikePrice,optionType,inp=0,intent=""):
           if(intent=="sell"): return payload['records']['data'][x][optionType]['bidprice']
           if(intent=="buy"): return payload['records']['data'][x][optionType]['askPrice']
 
-def nse_eq(symbol):
-    symbol = nsesymbolpurify(symbol)
+def nse_eq(symbol,verbose=True):
+    symbol = nsesymbolpurify(symbol,verbose)
     try:
-        payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol)
+        payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol,verbose)
         try:
             if(payload['error']=={}):
                 print("Please use nse_fno() function to reduce latency.")
-                payload = nsefetch('https://www.nseindia.com/api/quote-derivative?symbol='+symbol)
+                payload = nsefetch('https://www.nseindia.com/api/quote-derivative?symbol='+symbol,verbose)
         except:
             pass
     except KeyError:
@@ -329,151 +332,151 @@ def nse_eq(symbol):
     return payload
 
 
-def nse_fno(symbol):
-    symbol = nsesymbolpurify(symbol)
+def nse_fno(symbol,verbose=True):
+    symbol = nsesymbolpurify(symbol,verbose)
     try:
-        payload = nsefetch('https://www.nseindia.com/api/quote-derivative?symbol='+symbol)
+        payload = nsefetch('https://www.nseindia.com/api/quote-derivative?symbol='+symbol,verbose)
         try:
             if(payload['error']=={}):
                 print("Please use nse_eq() function to reduce latency.")
-                payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol)
+                payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol,verbose)
         except KeyError:
             pass
     except KeyError:
         print("Getting Error While Fetching.")
     return payload
 
-def quote_equity(symbol):
-    return nse_eq(symbol)
+def quote_equity(symbol,verbose=True):
+    return nse_eq(symbol,verbose)
 
-def quote_derivative(symbol):
-    return nse_fno(symbol)
+def quote_derivative(symbol,verbose=True):
+    return nse_fno(symbol,verbose)
 
-def option_chain(symbol):
-    return nse_optionchain_scrapper(symbol)
+def option_chain(symbol,verbose=True):
+    return nse_optionchain_scrapper(symbol,verbose)
 
-def nse_holidays(type="trading"):
+def nse_holidays(type="trading",verbose=True):
     if(type=="clearing"):
-        payload = nsefetch('https://www.nseindia.com/api/holiday-master?type=clearing')
+        payload = nsefetch('https://www.nseindia.com/api/holiday-master?type=clearing',verbose)
     if(type=="trading"):
-        payload = nsefetch('https://www.nseindia.com/api/holiday-master?type=trading')
+        payload = nsefetch('https://www.nseindia.com/api/holiday-master?type=trading',verbose)
     return payload
 
-def holiday_master(type="trading"):
-    return nse_holidays(type)
+def holiday_master(type="trading",verbose=True):
+    return nse_holidays(type,verbose)
 
-def nse_results(index="equities",period="Quarterly"):
+def nse_results(index="equities",period="Quarterly",verbose=True):
     if(index=="equities") or (index=="debt") or (index=="sme"):
         if(period=="Quarterly") or (period=="Annual")or (period=="Half-Yearly")or (period=="Others"):
-            payload = nsefetch('https://www.nseindia.com/api/corporates-financial-results?index='+index+'&period='+period)
+            payload = nsefetch('https://www.nseindia.com/api/corporates-financial-results?index='+index+'&period='+period,verbose)
             return pd.json_normalize(payload)
         else:
             print("Give Correct Period Input")
     else:
         print("Give Correct Index Input")
 
-def nse_events():
-    output = nsefetch('https://www.nseindia.com/api/event-calendar')
+def nse_events(verbose=True):
+    output = nsefetch('https://www.nseindia.com/api/event-calendar',verbose)
     return pd.json_normalize(output)
 
-def nse_past_results(symbol):
+def nse_past_results(symbol,verbose=True):
     symbol = nsesymbolpurify(symbol)
-    return nsefetch('https://www.nseindia.com/api/results-comparision?symbol='+symbol)
+    return nsefetch('https://www.nseindia.com/api/results-comparision?symbol='+symbol,verbose)
 
-def expiry_list(symbol,type="list"):
+def expiry_list(symbol,type="list",verbose=True):
     logging.info("Getting Expiry List of: "+ symbol)
 
     if(type!="list"):
-        payload = nse_optionchain_scrapper(symbol)
+        payload = nse_optionchain_scrapper(symbol,verbose)
         payload = pd.DataFrame({'Date':payload['records']['expiryDates']})
         return payload
 
     if(type=="list"):
-        payload = nse_quote(symbol)
+        payload = nse_quote(symbol,verbose)
         dates=list(set((payload["expiryDates"])))
         dates.sort(key = lambda date: datetime.datetime.strptime(date, '%d-%b-%Y'))
         return dates
 
 
-def nse_custom_function_secfno(symbol,attribute="lastPrice"):
-    positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
+def nse_custom_function_secfno(symbol,attribute="lastPrice",verbose=True):
+    positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O',verbose)
     endp = len(positions['data'])
     for x in range(0, endp):
         if(positions['data'][x]['symbol']==symbol.upper()):
             return positions['data'][x][attribute]
 
-def nse_blockdeal():
-    payload = nsefetch('https://nseindia.com/api/block-deal')
+def nse_blockdeal(verbose=True):
+    payload = nsefetch('https://nseindia.com/api/block-deal',verbose)
     return payload
 
-def nse_marketStatus():
-    payload = nsefetch('https://nseindia.com/api/marketStatus')
+def nse_marketStatus(verbose=True):
+    payload = nsefetch('https://nseindia.com/api/marketStatus',verbose)
     return payload
 
-def nse_circular(mode="latest"):
+def nse_circular(mode="latest",verbose=True):
     if(mode=="latest"):
-        payload = nsefetch('https://nseindia.com/api/latest-circular')
+        payload = nsefetch('https://nseindia.com/api/latest-circular',verbose)
     else:
-        payload = nsefetch('https://www.nseindia.com/api/circulars')
+        payload = nsefetch('https://www.nseindia.com/api/circulars',verbose)
     return payload
 
-def nse_fiidii(mode="pandas"):
+def nse_fiidii(mode="pandas",verbose=True):
     try:
         if(mode=="pandas"):
-            return pd.DataFrame(nsefetch('https://www.nseindia.com/api/fiidiiTradeReact'))
+            return pd.DataFrame(nsefetch('https://www.nseindia.com/api/fiidiiTradeReact',verbose))
         else:
-            return nsefetch('https://www.nseindia.com/api/fiidiiTradeReact')
+            return nsefetch('https://www.nseindia.com/api/fiidiiTradeReact',verbose)
     except:
         logger.info("Pandas is not working for some reason.")
-        return nsefetch('https://www.nseindia.com/api/fiidiiTradeReact')
+        return nsefetch('https://www.nseindia.com/api/fiidiiTradeReact',verbose)
 
-def nsetools_get_quote(symbol):
-    payload = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
+def nsetools_get_quote(symbol,verbose=True):
+    payload = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O',verbose)
     for m in range(len(payload['data'])):
         if(payload['data'][m]['symbol']==symbol.upper()):
             return payload['data'][m]
 
 
-def nse_index():
-    payload = nsefetch('https://iislliveblob.niftyindices.com/jsonfiles/LiveIndicesWatch.json')
+def nse_index(verbose=True):
+    payload = nsefetch('https://iislliveblob.niftyindices.com/jsonfiles/LiveIndicesWatch.json',verbose)
     payload = pd.DataFrame(payload["data"])
     return payload
 
-def nse_get_index_list():
-    payload = nsefetch('https://iislliveblob.niftyindices.com/jsonfiles/LiveIndicesWatch.json')
+def nse_get_index_list(verbose=True):
+    payload = nsefetch('https://iislliveblob.niftyindices.com/jsonfiles/LiveIndicesWatch.json',verbose)
     payload = pd.DataFrame(payload["data"])
     return payload["indexName"].tolist()
 
-def nse_get_index_quote(index):
-    payload = nsefetch('https://iislliveblob.niftyindices.com/jsonfiles/LiveIndicesWatch.json')
+def nse_get_index_quote(index,verbose=True):
+    payload = nsefetch('https://iislliveblob.niftyindices.com/jsonfiles/LiveIndicesWatch.json',verbose)
     for m in range(len(payload['data'])):
         if(payload['data'][m]["indexName"] == index.upper()):
             return payload['data'][m]
 
-def nse_get_advances_declines(mode="pandas"):
+def nse_get_advances_declines(mode="pandas",verbose=True):
     try:
         if(mode=="pandas"):
-            positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
+            positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O',verbose)
             return pd.DataFrame(positions['data'])
         else:
-            return nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
+            return nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O',verbose)
     except:
         logger.info("Pandas is not working for some reason.")
-        return nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
+        return nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O',verbose)
 
-def nse_get_top_losers():
-    positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
+def nse_get_top_losers(verbose=True):
+    positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O',verbose)
     df = pd.DataFrame(positions['data'])
     df = df.sort_values(by="pChange")
     return df.head(5)
 
-def nse_get_top_gainers():
-    positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
+def nse_get_top_gainers(verbose=True):
+    positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O',verbose)
     df = pd.DataFrame(positions['data'])
     df = df.sort_values(by="pChange" , ascending = False)
     return df.head(5)
 
-def nse_get_fno_lot_sizes(symbol="all",mode="list"):
+def nse_get_fno_lot_sizes(symbol="all",mode="list",verbose=True):
     url="https://archives.nseindia.com/content/fo/fo_mktlots.csv"
 
     if(mode=="list"):
@@ -496,17 +499,17 @@ def nse_get_fno_lot_sizes(symbol="all",mode="list"):
             payload = payload[(payload.iloc[:, 1] == symbol.upper())]
             return payload
 
-def whoistheboss():
+def whoistheboss(verbose=True):
     return "subhash"
 
-def indiavix():
-    payload = nsefetch("https://www.nseindia.com/api/allIndices")
+def indiavix(verbose=True):
+    payload = nsefetch("https://www.nseindia.com/api/allIndices",verbose)
     for x in range(0, len(payload["data"])):
         if(payload["data"][x]["index"]=="INDIA VIX"):
             return payload["data"][x]["last"]
 
-def index_info(index):
-    payload = nsefetch("https://www.nseindia.com/api/allIndices")
+def index_info(index,verbose=True):
+    payload = nsefetch("https://www.nseindia.com/api/allIndices",verbose)
     for x in range(0, len(payload["data"])):
         if(payload["data"][x]["index"]==index):
             return payload["data"][x]
@@ -514,7 +517,7 @@ def index_info(index):
 import math
 from scipy.stats import norm
 
-def black_scholes_dexter(S0,X,t,σ="",r=10,q=0.0,td=365):
+def black_scholes_dexter(S0,X,t,σ="",r=10,q=0.0,td=365,verbose=True):
 
   if(σ==""):σ =indiavix()
 
@@ -541,15 +544,15 @@ def black_scholes_dexter(S0,X,t,σ="",r=10,q=0.0,td=365):
 
   return call_theta,put_theta,call_premium,put_premium,call_delta,put_delta,gamma,vega,call_rho,put_rho
 
-def equity_history_virgin(symbol,series,start_date,end_date):
+def equity_history_virgin(symbol,series,start_date,end_date,verbose=True):
     #url="https://www.nseindia.com/api/historical/cm/equity?symbol="+symbol+"&series=[%22"+series+"%22]&from="+str(start_date)+"&to="+str(end_date)+""
     url = 'https://www.nseindia.com/api/historical/cm/equity?symbol=' + symbol + '&series=["' + series + '"]&from=' + start_date + '&to=' + end_date
 
-    payload = nsefetch(url)
+    payload = nsefetch(url,verbose)
     return pd.DataFrame.from_records(payload["data"])
 
 # You shall see beautiful use the logger function.
-def equity_history(symbol,series,start_date,end_date):
+def equity_history(symbol,series,start_date,end_date,verbose=True):
     #We are getting the input in text. So it is being converted to Datetime object from String.
     start_date = datetime.datetime.strptime(start_date, "%d-%m-%Y")
     end_date = datetime.datetime.strptime(end_date, "%d-%m-%Y")
@@ -577,7 +580,7 @@ def equity_history(symbol,series,start_date,end_date):
 
         #total=total.append(equity_history_virgin(symbol,series,start_date,temp_date))
         #total=total.concat(equity_history_virgin(symbol,series,start_date,temp_date))
-        total = pd.concat([total, equity_history_virgin(symbol, series, start_date, temp_date)])
+        total = pd.concat([total, equity_history_virgin(symbol, series, start_date, temp_date,verbose)])
 
 
         logging.info("Length of the Table: "+ str(len(total)))
@@ -597,7 +600,7 @@ def equity_history(symbol,series,start_date,end_date):
 
     #total=total.append(equity_history_virgin(symbol,series,start_date,end_date))
     #total=total.concat(equity_history_virgin(symbol,series,start_date,end_date))
-    total = pd.concat([total, equity_history_virgin(symbol, series, start_date, end_date)])
+    total = pd.concat([total, equity_history_virgin(symbol, series, start_date, end_date,verbose)])
 
 
     logging.info("Finale")
@@ -605,7 +608,7 @@ def equity_history(symbol,series,start_date,end_date):
     payload = total.iloc[::-1].reset_index(drop=True)
     return payload
 
-def derivative_history_virgin(symbol,start_date,end_date,instrumentType,expiry_date,strikePrice="",optionType=""):
+def derivative_history_virgin(symbol,start_date,end_date,instrumentType,expiry_date,strikePrice="",optionType="",verbose=True):
 
     instrumentType = instrumentType.lower()
 
@@ -624,12 +627,12 @@ def derivative_history_virgin(symbol,start_date,end_date,instrumentType,expiry_d
         strikePrice = str(strikePrice)
 
     nsefetch_url = "https://www.nseindia.com/api/historical/fo/derivatives?&from="+str(start_date)+"&to="+str(end_date)+"&optionType="+optionType+"&strikePrice="+strikePrice+"&expiryDate="+expiry_date+"&instrumentType="+instrumentType+"&symbol="+symbol+""
-    payload = nsefetch(nsefetch_url)
+    payload = nsefetch(nsefetch_url,verbose)
     logging.info(nsefetch_url)
     logging.info(payload)
     return pd.DataFrame.from_records(payload["data"])
 
-def derivative_history(symbol,start_date,end_date,instrumentType,expiry_date,strikePrice="",optionType=""):
+def derivative_history(symbol,start_date,end_date,instrumentType,expiry_date,strikePrice="",optionType="",verbose=True):
     #We are getting the input in text. So it is being converted to Datetime object from String.
     start_date = datetime.datetime.strptime(start_date, "%d-%m-%Y")
     end_date = datetime.datetime.strptime(end_date, "%d-%m-%Y")
@@ -657,7 +660,7 @@ def derivative_history(symbol,start_date,end_date,instrumentType,expiry_date,str
 
         #total=total.append(derivative_history_virgin(symbol,start_date,temp_date,instrumentType,expiry_date,strikePrice,optionType))
         #total=total.concat([total, derivative_history_virgin(symbol,start_date,temp_date,instrumentType,expiry_date,strikePrice,optionType)])
-        total = pd.concat([total, derivative_history_virgin(symbol, start_date, temp_date, instrumentType, expiry_date, strikePrice, optionType)])
+        total = pd.concat([total, derivative_history_virgin(symbol, start_date, temp_date, instrumentType, expiry_date, strikePrice, optionType,verbose)])
 
 
         logging.info("Length of the Table: "+ str(len(total)))
@@ -677,7 +680,7 @@ def derivative_history(symbol,start_date,end_date,instrumentType,expiry_date,str
 
     #total=total.append(derivative_history_virgin(symbol,start_date,end_date,instrumentType,expiry_date,strikePrice,optionType))
     #total = total.concat([total, derivative_history_virgin(symbol,start_date,end_date,instrumentType,expiry_date,strikePrice,optionType)])
-    total = pd.concat([total, derivative_history_virgin(symbol, start_date, end_date, instrumentType, expiry_date, strikePrice, optionType)])
+    total = pd.concat([total, derivative_history_virgin(symbol, start_date, end_date, instrumentType, expiry_date, strikePrice, optionType,verbose)])
 
 
 
@@ -687,10 +690,10 @@ def derivative_history(symbol,start_date,end_date,instrumentType,expiry_date,str
     return payload
 
 
-def expiry_history(symbol,start_date="",end_date="",type="options"):
+def expiry_history(symbol,start_date="",end_date="",type="options",verbose=True):
     if(end_date==""):end_date=end_date
     nsefetch_url = "https://www.nseindia.com/api/historical/fo/derivatives/meta?&from="+start_date+"&to="+end_date+"&symbol="+symbol+""
-    payload = nsefetch(nsefetch_url)
+    payload = nsefetch(nsefetch_url,verbose)
 
     print(payload)
 
@@ -742,43 +745,43 @@ niftyindices_headers = {
     'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
 }
 
-def index_history(symbol,start_date,end_date):
+def index_history(symbol,start_date,end_date,verbose=True):
     data = "{'name':'"+symbol+"','startDate':'"+start_date+"','endDate':'"+end_date+"'}"
     payload = requests.post('https://niftyindices.com/Backpage.aspx/getHistoricaldatatabletoString', headers=niftyindices_headers,  data=data).json()
     payload = json.loads(payload["d"])
     payload=pd.DataFrame.from_records(payload)
     return payload
 
-def index_pe_pb_div(symbol,start_date,end_date):
+def index_pe_pb_div(symbol,start_date,end_date,verbose=True):
     data = "{'name':'"+symbol+"','startDate':'"+start_date+"','endDate':'"+end_date+"'}"
     payload = requests.post('https://niftyindices.com/Backpage.aspx/getpepbHistoricaldataDBtoString', headers=niftyindices_headers,  data=data).json()
     payload = json.loads(payload["d"])
     payload=pd.DataFrame.from_records(payload)
     return payload
 
-def index_total_returns(symbol,start_date,end_date):
+def index_total_returns(symbol,start_date,end_date,verbose=True):
     data = "{'name':'"+symbol+"','startDate':'"+start_date+"','endDate':'"+end_date+"'}"
     payload = requests.post('https://niftyindices.com/Backpage.aspx/getTotalReturnIndexString', headers=niftyindices_headers,  data=data).json()
     payload = json.loads(payload["d"])
     payload=pd.DataFrame.from_records(payload)
     return payload
 
-def get_bhavcopy(date):
+def get_bhavcopy(date,verbose=True):
     date = date.replace("-","")
     payload=pd.read_csv("https://archives.nseindia.com/products/content/sec_bhavdata_full_"+date+".csv")
     return payload
 
-def get_bulkdeals():
+def get_bulkdeals(verbose=True):
     payload=pd.read_csv("https://archives.nseindia.com/content/equities/bulk.csv")
     return payload
 
-def get_blockdeals():
+def get_blockdeals(verbose=True):
     payload=pd.read_csv("https://archives.nseindia.com/content/equities/block.csv")
     return payload
 
 #Request from subhash
 ## https://unofficed.com/how-to-find-the-beta-of-indian-stocks-using-python/
-def get_beta_df_maker(symbol,days):
+def get_beta_df_maker(symbol,days,verbose=True):
     if("NIFTY" in symbol):
         end_date = datetime.datetime.now().strftime("%d-%b-%Y")
         end_date = str(end_date)
@@ -786,7 +789,7 @@ def get_beta_df_maker(symbol,days):
         start_date = (datetime.datetime.now()- datetime.timedelta(days=days)).strftime("%d-%b-%Y")
         start_date = str(start_date)
 
-        df2=index_history(symbol,start_date,end_date)
+        df2=index_history(symbol,start_date,end_date,verbose)
         df2["daily_change"]=df2["CLOSE"].astype(float).pct_change()
         df2=df2[['HistoricalDate','daily_change']]
         df2 = df2.iloc[1: , :]
@@ -798,20 +801,20 @@ def get_beta_df_maker(symbol,days):
         start_date = (datetime.datetime.now()- datetime.timedelta(days=days)).strftime("%d-%m-%Y")
         start_date = str(start_date)
 
-        df = equity_history(symbol,"EQ",start_date,end_date)
+        df = equity_history(symbol,"EQ",start_date,end_date,verbose)
 
         df["daily_change"]=df["CH_CLOSING_PRICE"].pct_change()
         df=df[['CH_TIMESTAMP','daily_change']]
         df = df.iloc[1: , :] #thispointer.com/drop-first-row-of-pandas-dataframe-3-ways/
         return df
 
-def getbeta(symbol,days=365,symbol2="NIFTY 50"):
-    return get_beta(symbol,days,symbol2)
+def getbeta(symbol,days=365,symbol2="NIFTY 50",verbose=True):
+    return get_beta(symbol,days,symbol2,verbose)
 
-def get_beta(symbol,days=365,symbol2="NIFTY 50"):
+def get_beta(symbol,days=365,symbol2="NIFTY 50",verbose=True):
     #Default is 248 days. (Input of Subhash)
-    df = get_beta_df_maker(symbol,days)
-    df2 = get_beta_df_maker(symbol2,days)
+    df = get_beta_df_maker(symbol,days,verbose)
+    df2 = get_beta_df_maker(symbol2,days,verbose)
 
     x=df["daily_change"].tolist()
     y=df2["daily_change"].tolist()
@@ -826,8 +829,8 @@ def get_beta(symbol,days=365,symbol2="NIFTY 50"):
     beta = covariance/variance
     return round(beta,3)
 
-def nse_preopen(key="NIFTY",type="pandas"):
-    payload = nsefetch("https://www.nseindia.com/api/market-data-pre-open?key="+key+"")
+def nse_preopen(key="NIFTY",type="pandas",verbose=True):
+    payload = nsefetch("https://www.nseindia.com/api/market-data-pre-open?key="+key+"",verbose)
     if(type=="pandas"):
         payload = pd.DataFrame(payload['data'])
         payload  = pd.json_normalize(payload['metadata'])
@@ -836,8 +839,8 @@ def nse_preopen(key="NIFTY",type="pandas"):
         return payload
 
 #By Avinash https://forum.unofficed.com/t/nsepython-documentation/376/102?u=dexter
-def nse_preopen_movers(key="FO",filter=1.5):
-    preOpen_gainer=nse_preopen(key)
+def nse_preopen_movers(key="FO",filter=1.5,verbose=True):
+    preOpen_gainer=nse_preopen(key,verbose)
     return preOpen_gainer[preOpen_gainer['pChange'] >1.5],preOpen_gainer[preOpen_gainer['pChange'] <-1.5]
 
 # type = "securities"
@@ -847,26 +850,26 @@ def nse_preopen_movers(key="FO",filter=1.5):
 # sort = "volume"
 # sort = "value"
 
-def nse_most_active(type="securities",sort="value"):
-    payload = nsefetch("https://www.nseindia.com/api/live-analysis-most-active-"+type+"?index="+sort+"")
+def nse_most_active(type="securities",sort="value",verbose=True):
+    payload = nsefetch("https://www.nseindia.com/api/live-analysis-most-active-"+type+"?index="+sort+"",verbose)
     payload = pd.DataFrame(payload["data"])
     return payload
 
 
-def nse_eq_symbols():
+def nse_eq_symbols(verbose=True):
     #https://forum.unofficed.com/t/feature-request-stocklist-api/1073/11
     eq_list_pd = pd.read_csv('https://archives.nseindia.com/content/equities/EQUITY_L.csv')
     return eq_list_pd['SYMBOL'].tolist()
 
-def nse_price_band_hitters(bandtype="both",view="AllSec"):
-  payload = nsefetch("https://www.nseindia.com/api/live-analysis-price-band-hitter")
+def nse_price_band_hitters(bandtype="both",view="AllSec",verbose=True):
+  payload = nsefetch("https://www.nseindia.com/api/live-analysis-price-band-hitter",verbose)
   
   #bandtype can be upper, lower, both
   #view can be AllSec,SecGtr20,SecLwr20
   return pd.DataFrame(payload[bandtype][view]["data"])
 
-def nse_largedeals(mode="bulk_deals"):
-  payload = nsefetch('https://www.nseindia.com/api/snapshot-capital-market-largedeal')
+def nse_largedeals(mode="bulk_deals",verbose=True):
+  payload = nsefetch('https://www.nseindia.com/api/snapshot-capital-market-largedeal',verbose)
   if(mode=="bulk_deals"):
     return pd.DataFrame(payload["BULK_DEALS_DATA"])
   if(mode=="short_deals"):
@@ -874,7 +877,7 @@ def nse_largedeals(mode="bulk_deals"):
   if(mode=="block_deals"):
     return pd.DataFrame(payload["BLOCK_DEALS_DATA"])
   
-def nse_largedeals_historical(from_date, to_date, mode="bulk_deals"):
+def nse_largedeals_historical(from_date, to_date, mode="bulk_deals",verbose=True):
     if mode == "bulk_deals":
         mode = "bulk-deals"
     elif mode == "short_deals":
@@ -884,20 +887,20 @@ def nse_largedeals_historical(from_date, to_date, mode="bulk_deals"):
     
     url='https://www.nseindia.com/api/historical/' + mode + '?from=' + from_date + '&to=' + to_date
     logging.info("Fetching " + str(url))
-    payload = nsefetch(url)
+    payload = nsefetch(url,verbose)
     return pd.DataFrame(payload["data"])
 
 #https://forum.unofficed.com/t/feature-request-nse-fno-participant-wise-oi/1179/7
 #print(get_fao_participant_oi("04-06-2021"))
-def get_fao_participant_oi(date):
+def get_fao_participant_oi(date,verbose=True):
     date = date.replace("-","")
     payload=pd.read_csv("https://archives.nseindia.com/content/nsccl/fao_participant_oi_"+date+".csv")
     return payload
 
 #https://forum.unofficed.com/t/how-to-check-if-the-market-is-open-today-or-not/1268/1
-def is_market_open(segment = "FO"): #COM,CD,CB,CMOT,COM,FO,IRD,MF,NDM,NTRP,SLBS
+def is_market_open(segment = "FO",verbose=True): #COM,CD,CB,CMOT,COM,FO,IRD,MF,NDM,NTRP,SLBS
     
-    holiday_json = nse_holidays()[segment]
+    holiday_json = nse_holidays(verbose)[segment]
 
     # Get today's date in the format 'dd-Mon-yyyy'
     today_date = datetime.date.today().strftime('%d-%b-%Y')
@@ -911,8 +914,8 @@ def is_market_open(segment = "FO"): #COM,CD,CB,CMOT,COM,FO,IRD,MF,NDM,NTRP,SLBS
             print(f"Market is closed today because of {holiday['description']}")
             return False
 
-def nse_expirydetails_by_symbol(symbol,meta ="Futures",i=0):
-    payload = nse_quote(symbol)
+def nse_expirydetails_by_symbol(symbol,meta ="Futures",i=0,verbose=True):
+    payload = nse_quote(symbol,verbose)
 
     if(meta=="Futures"):
       selected_key = next((key for key in payload["expiryDatesByInstrument"] if "futures" in key.lower()), None)
@@ -928,8 +931,8 @@ def nse_expirydetails_by_symbol(symbol,meta ="Futures",i=0):
     dte = (currentExpiry - datetime.datetime.now().date()).days
     return currentExpiry,dte
 
-def security_wise_archive(from_date, to_date, symbol, series="ALL"):   
+def security_wise_archive(from_date, to_date, symbol, series="ALL",verbose=True):   
     base_url = "https://www.nseindia.com/api/historical/securityArchives"
     url = f"{base_url}?from={from_date}&to={to_date}&symbol={symbol.upper()}&dataType=priceVolumeDeliverable&series={series.upper()}"
-    payload = nsefetch(url)
+    payload = nsefetch(url,verbose)
     return pd.DataFrame(payload['data'])
