@@ -34,10 +34,9 @@ if(mode=='local'):
     def nsefetch(payload):
         try:
             output = requests.get(payload,headers=headers).json()
-            print(output)
         except ValueError:
             s =requests.Session()
-            output = s.get("http://nseindia.com",headers=headers)
+            s.get("http://nseindia.com",headers=headers)
             output = s.get(payload,headers=headers).json()
         return output
 
