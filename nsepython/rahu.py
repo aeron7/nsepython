@@ -743,7 +743,7 @@ niftyindices_headers = {
 }
 
 def index_history(symbol,start_date,end_date):
-    data = "{'name':'"+symbol+"','startDate':'"+start_date+"','endDate':'"+end_date+"'}"
+    data = f"{{ 'cinfo': \"{{'name':'{symbol}','startDate':'{start_date}','endDate':'{end_date}','indexName':'{symbol}'}}\" }}"
     payload = requests.post('https://niftyindices.com/Backpage.aspx/getHistoricaldatatabletoString', headers=niftyindices_headers,  data=data).json()
     payload = json.loads(payload["d"])
     payload=pd.DataFrame.from_records(payload)
