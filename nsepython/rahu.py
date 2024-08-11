@@ -10,6 +10,9 @@ import datetime,time
 import logging
 import re
 import urllib.parse
+import zipfile
+import io
+from typing import List
 
 mode ='local'
 
@@ -32,15 +35,19 @@ if(mode=='vpn'):
         return output
 if(mode=='local'):
     def nsefetch(payload):
-        try:
-            output = requests.get(payload,headers=headers).json()
-            #print(output)
-        except ValueError:
-            s =requests.Session()
-            output = s.get("http://nseindia.com",headers=headers)
-            output = s.get(payload,headers=headers).json()
+        if ".zip" not in payload:
+            try:
+                output = requests.get(payload,headers=headers).json()
+                #print(output)
+            except ValueError:
+                s =requests.Session()
+                output = s.get("http://nseindia.com",headers=headers)
+                output = s.get(payload,headers=headers).json()
+        else:
+            s = requests.session()
+            output = s.get(payload, headers=headers)
+        
         return output
-
 
 headers = {
     'Connection': 'keep-alive',
@@ -56,12 +63,12 @@ headers = {
     'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
 }
 
-#Curl headers
+# Curl headers
 curl_headers = ''' -H "authority: beta.nseindia.com" -H "cache-control: max-age=0" -H "dnt: 1" -H "upgrade-insecure-requests: 1" -H "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.117 Safari/537.36" -H "sec-fetch-user: ?1" -H "accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9" -H "sec-fetch-site: none" -H "sec-fetch-mode: navigate" -H "accept-encoding: gzip, deflate, br" -H "accept-language: en-US,en;q=0.9,hi;q=0.8" --compressed'''
 
 run_time=datetime.datetime.now()
 
-#Constants
+# Constants
 indices = ['NIFTY','FINNIFTY','BANKNIFTY']
 
 def running_status():
@@ -69,7 +76,7 @@ def running_status():
     end_now=datetime.datetime.now().replace(hour=15, minute=30, second=0, microsecond=0)
     return start_now<datetime.datetime.now()<end_now
 
-#Getting FNO Symboles
+# Getting FNO Symboles
 def fnolist():
     # df = pd.read_csv("https://www1.nseindia.com/content/fo/fo_mktlots.csv")
     # return [x.strip(' ') for x in df.drop(df.index[3]).iloc[:,1].to_list()]
@@ -206,8 +213,8 @@ def pcr(payload,inp='0'):
                 pass
     return pe_oi / ce_oi
 
-#forum.unofficed.com/t/unable-to-find-nse-quote-meta-api/702/4
-#Refer https://forum.unofficed.com/t/changed-the-nse-quote-ltp-function/1276
+# forum.unofficed.com/t/unable-to-find-nse-quote-meta-api/702/4
+# Refer https://forum.unofficed.com/t/changed-the-nse-quote-ltp-function/1276
 def nse_quote_ltp(symbol,expiryDate="latest",optionType="-",strikePrice=0):
   payload = nse_quote(symbol)
 
@@ -776,7 +783,7 @@ def get_blockdeals():
     payload=pd.read_csv("https://archives.nseindia.com/content/equities/block.csv")
     return payload
 
-#Request from subhash
+# Request from subhash
 ## https://unofficed.com/how-to-find-the-beta-of-indian-stocks-using-python/
 def get_beta_df_maker(symbol,days):
     if("NIFTY" in symbol):
@@ -835,7 +842,7 @@ def nse_preopen(key="NIFTY",type="pandas"):
     else:
         return payload
 
-#By Avinash https://forum.unofficed.com/t/nsepython-documentation/376/102?u=dexter
+# By Avinash https://forum.unofficed.com/t/nsepython-documentation/376/102?u=dexter
 def nse_preopen_movers(key="FO",filter=1.5):
     preOpen_gainer=nse_preopen(key)
     return preOpen_gainer[preOpen_gainer['pChange'] >1.5],preOpen_gainer[preOpen_gainer['pChange'] <-1.5]
@@ -873,7 +880,7 @@ def nse_largedeals(mode="bulk_deals"):
     return pd.DataFrame(payload["SHORT_DEALS_DATA"])
   if(mode=="block_deals"):
     return pd.DataFrame(payload["BLOCK_DEALS_DATA"])
-  
+
 def nse_largedeals_historical(from_date, to_date, mode="bulk_deals"):
     if mode == "bulk_deals":
         mode = "bulk-deals"
@@ -887,14 +894,14 @@ def nse_largedeals_historical(from_date, to_date, mode="bulk_deals"):
     payload = nsefetch(url)
     return pd.DataFrame(payload["data"])
 
-#https://forum.unofficed.com/t/feature-request-nse-fno-participant-wise-oi/1179/7
-#print(get_fao_participant_oi("04-06-2021"))
+# https://forum.unofficed.com/t/feature-request-nse-fno-participant-wise-oi/1179/7
+# print(get_fao_participant_oi("04-06-2021"))
 def get_fao_participant_oi(date):
     date = date.replace("-","")
     payload=pd.read_csv("https://archives.nseindia.com/content/nsccl/fao_participant_oi_"+date+".csv")
     return payload
 
-#https://forum.unofficed.com/t/how-to-check-if-the-market-is-open-today-or-not/1268/1
+# https://forum.unofficed.com/t/how-to-check-if-the-market-is-open-today-or-not/1268/1
 def is_market_open(segment = "FO"): #COM,CD,CB,CMOT,COM,FO,IRD,MF,NDM,NTRP,SLBS
     
     holiday_json = nse_holidays()[segment]
@@ -933,3 +940,67 @@ def security_wise_archive(from_date, to_date, symbol, series="ALL"):
     url = f"{base_url}?from={from_date}&to={to_date}&symbol={symbol.upper()}&dataType=priceVolumeDeliverable&series={series.upper()}"
     payload = nsefetch(url)
     return pd.DataFrame(payload['data'])
+
+
+def _fno_data_fm_latest_file(latest_trade_date: str) -> pd.DataFrame:
+
+    latest_trade_date = datetime.datetime.strptime(latest_trade_date, "%Y-%m-%d").date()
+
+    if latest_trade_date < datetime.date.today():
+
+        fno_bhav_copy_file: str = (
+            f"BhavCopy_NSE_FO_0_0_0_{latest_trade_date.year:04d}{latest_trade_date.month:02d}{latest_trade_date.day:02d}_F_0000.csv"
+        )
+        base_url: str = (
+            f"https://nsearchives.nseindia.com/content/fo/{fno_bhav_copy_file}.zip"
+        )
+
+        payload = nsefetch(base_url)
+
+        data_lst: List[str] = list()
+
+        unzip = zipfile.ZipFile(io.BytesIO(payload.content))
+        for file_name in unzip.namelist():
+            with unzip.open(file_name) as file_:
+                for line in file_.readlines():
+                    data_lst.append(line.decode("utf-8").rstrip(",\n"))
+
+        payload: pd.DataFrame = pd.DataFrame(data_lst)
+
+        payload = payload[0].str.split(",", expand=True)
+
+        payload.columns = payload.iloc[0].values
+        payload = payload[1:]
+
+        return payload
+
+    else:
+        return pd.DataFrame()
+
+
+def get_fno_lot_sizes_0(latest_trade_date: str, symbol: str = None) -> pd.DataFrame:
+    """
+    - Input parameter:
+        - latest_trade_date:str :- "YYYY-MM-DD" format
+        - (Optional) symbol:str :- Symbol short name e.g. "INFY"
+
+    - Output:
+        - Returns Pandas dataframe object.
+    """
+
+    payload: pd.DataFrame = _fno_data_fm_latest_file(
+        latest_trade_date=latest_trade_date
+    )
+
+    payload = (
+        payload[["TckrSymb", "NewBrdLotQty"]]
+        .drop_duplicates()
+        .sort_values(by=["TckrSymb"])
+    )
+
+    if not symbol == None:
+        payload = payload.loc[
+            payload["TckrSymb"] == symbol, ["TckrSymb", "NewBrdLotQty"]
+        ].drop_duplicates()
+
+    return payload
