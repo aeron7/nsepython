@@ -902,20 +902,24 @@ def get_fao_participant_oi(date):
     return payload
 
 # https://forum.unofficed.com/t/how-to-check-if-the-market-is-open-today-or-not/1268/1
-def is_market_open(segment = "FO"): #COM,CD,CB,CMOT,COM,FO,IRD,MF,NDM,NTRP,SLBS
-    
+def is_market_open(segment = "FO", latest_trade_date:str = None): #COM,CD,CB,CMOT,COM,FO,IRD,MF,NDM,NTRP,SLBS
     holiday_json = nse_holidays()[segment]
+
+    week_day:int = datetime.date.today().weekday()
 
     # Get today's date in the format 'dd-Mon-yyyy'
     today_date = datetime.date.today().strftime('%d-%b-%Y')
 
+    if not latest_trade_date == None:
+        week_day:int = datetime.datetime.strptime(latest_trade_date, "%Y-%m-%d").date().weekday()
+
     # Check if today's date is in the holiday_json
     for holiday in holiday_json:
-        if holiday['tradingDate'] != today_date:
+        if holiday['tradingDate'] != today_date and week_day < 5:
             print("FNO Market is open today. Have a Nice Trade!")
             return True
-        if holiday['tradingDate'] == today_date:
-            print(f"Market is closed today because of {holiday['description']}")
+        if holiday['tradingDate'] == today_date or week_day > 4:
+            print(f"Market is closed today because of {holiday['description']} or a Weekoff")
             return False
 
 def nse_expirydetails_by_symbol(symbol,meta ="Futures",i=0):
@@ -942,40 +946,35 @@ def security_wise_archive(from_date, to_date, symbol, series="ALL"):
     return pd.DataFrame(payload['data'])
 
 
-def _fno_data_fm_latest_file(latest_trade_date: str) -> pd.DataFrame:
+def _fno_data_fm_latest_file(latest_trade_date:str) -> pd.DataFrame:
 
     latest_trade_date = datetime.datetime.strptime(latest_trade_date, "%Y-%m-%d").date()
 
-    if latest_trade_date < datetime.date.today():
+    fno_bhav_copy_file: str = (
+        f"BhavCopy_NSE_FO_0_0_0_{latest_trade_date.year:04d}{latest_trade_date.month:02d}{latest_trade_date.day:02d}_F_0000.csv"
+    )
+    base_url: str = (
+        f"https://nsearchives.nseindia.com/content/fo/{fno_bhav_copy_file}.zip"
+    )
 
-        fno_bhav_copy_file: str = (
-            f"BhavCopy_NSE_FO_0_0_0_{latest_trade_date.year:04d}{latest_trade_date.month:02d}{latest_trade_date.day:02d}_F_0000.csv"
-        )
-        base_url: str = (
-            f"https://nsearchives.nseindia.com/content/fo/{fno_bhav_copy_file}.zip"
-        )
+    payload = nsefetch(base_url)
 
-        payload = nsefetch(base_url)
+    data_lst: List[str] = list()
 
-        data_lst: List[str] = list()
+    unzip = zipfile.ZipFile(io.BytesIO(payload.content))
+    for file_name in unzip.namelist():
+        with unzip.open(file_name) as file_:
+            for line in file_.readlines():
+                data_lst.append(line.decode("utf-8").rstrip(",\n"))
 
-        unzip = zipfile.ZipFile(io.BytesIO(payload.content))
-        for file_name in unzip.namelist():
-            with unzip.open(file_name) as file_:
-                for line in file_.readlines():
-                    data_lst.append(line.decode("utf-8").rstrip(",\n"))
+    payload: pd.DataFrame = pd.DataFrame(data_lst)
 
-        payload: pd.DataFrame = pd.DataFrame(data_lst)
+    payload = payload[0].str.split(",", expand=True)
 
-        payload = payload[0].str.split(",", expand=True)
+    payload.columns = payload.iloc[0].values
+    payload = payload[1:]
 
-        payload.columns = payload.iloc[0].values
-        payload = payload[1:]
-
-        return payload
-
-    else:
-        return pd.DataFrame()
+    return payload
 
 
 def get_fno_lot_sizes_0(latest_trade_date: str, symbol: str = None) -> pd.DataFrame:
@@ -987,20 +986,26 @@ def get_fno_lot_sizes_0(latest_trade_date: str, symbol: str = None) -> pd.DataFr
     - Output:
         - Returns Pandas dataframe object.
     """
+    is_trading_day: bool = is_market_open(latest_trade_date=latest_trade_date)
 
-    payload: pd.DataFrame = _fno_data_fm_latest_file(
-        latest_trade_date=latest_trade_date
-    )
+    if is_trading_day:
 
-    payload = (
-        payload[["TckrSymb", "NewBrdLotQty"]]
-        .drop_duplicates()
-        .sort_values(by=["TckrSymb"])
-    )
+        payload: pd.DataFrame = _fno_data_fm_latest_file(
+            latest_trade_date=latest_trade_date
+        )
 
-    if not symbol == None:
-        payload = payload.loc[
-            payload["TckrSymb"] == symbol, ["TckrSymb", "NewBrdLotQty"]
-        ].drop_duplicates()
+        payload = (
+            payload[["TckrSymb", "NewBrdLotQty"]]
+            .drop_duplicates()
+            .sort_values(by=["TckrSymb"])
+        )
 
-    return payload
+        if not symbol == None:
+            payload = payload.loc[
+                payload["TckrSymb"] == symbol, ["TckrSymb", "NewBrdLotQty"]
+            ].drop_duplicates()
+
+        return payload
+
+    else:
+        return "-"
