@@ -81,7 +81,7 @@ curl_headers = ''' -H "authority: beta.nseindia.com" -H "cache-control: max-age=
 run_time=datetime.datetime.now()
 
 #Constants
-indices = ['NIFTY','FINNIFTY','BANKNIFTY']
+indices = ['NIFTY','FINNIFTY','BANKNIFTY','MIDCPNIFTY']
 
 def running_status():
     start_now=datetime.datetime.now().replace(hour=9, minute=15, second=0, microsecond=0)
@@ -95,7 +95,7 @@ def fnolist():
 
     positions = nsefetch('https://www.nseindia.com/api/equity-stockIndices?index=SECURITIES%20IN%20F%26O')
 
-    nselist=['NIFTY','NIFTYIT','BANKNIFTY']
+    nselist=indices.copy()
 
     i=0
     for x in range(i, len(positions['data'])):
