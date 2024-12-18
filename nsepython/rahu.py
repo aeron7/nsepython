@@ -923,12 +923,14 @@ def is_market_open(segment = "FO"): #COM,CD,CB,CMOT,COM,FO,IRD,MF,NDM,NTRP,SLBS
 
     # Check if today's date is in the holiday_json
     for holiday in holiday_json:
+        print("Loop Ran", holiday['tradingDate'])
         if holiday['tradingDate'] != today_date:
-            print("FNO Market is open today. Have a Nice Trade!")
-            return True
+            continue
         if holiday['tradingDate'] == today_date:
             print(f"Market is closed today because of {holiday['description']}")
             return False
+    print("FNO Market is open today. Have a Nice Trade!")
+    return True
 
 def nse_expirydetails_by_symbol(symbol,meta ="Futures",i=0):
     payload = nse_quote(symbol)
