@@ -33,7 +33,7 @@ Use the package manager [pip](https://pypi.org/project/nsepython/) to install ns
 
 #### [NSEPython Local Edition](https://github.com/aeron7/nsepython)
 
-Access NSEPython for laptops, specifically tailored for Windows 9 and Windows 10 compatibility.
+Access NSEPython for laptops, specifically tailored for Windows 10 and Windows 11 compatibility.
 
 
 ```bash
