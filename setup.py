@@ -1,7 +1,6 @@
 import setuptools
 import os
 
-
 version = os.environ.get("PACKAGE_VERSION", "0.0.0")  # fallback if not set
 
 with open("README.md", "r") as fh:
