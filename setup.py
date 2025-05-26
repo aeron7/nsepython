@@ -1,4 +1,7 @@
 import setuptools
+import os
+
+version = os.environ.get("PACKAGE_VERSION", "0.0.0")  # fallback if not set
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -6,7 +9,7 @@ with open("README.md", "r") as fh:
 setuptools.setup(
     name = 'nsepython',
     packages=setuptools.find_packages(),
-    version = '2.95',
+    version = version,
     license='GNU',
     include_package_data=True,
     description = 'Python library for NSE India APIs',
