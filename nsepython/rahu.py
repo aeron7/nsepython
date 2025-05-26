@@ -13,32 +13,44 @@ import urllib.parse
 
 mode ='local'
 
-if(mode=='vpn'):
-    def nsefetch(payload):
-        if (("%26" in payload) or ("%20" in payload)):
-            encoded_url = payload
-        else:
-            encoded_url = urllib.parse.quote(payload, safe=':/?&=')
-        payload_var = 'curl -b cookies.txt "' + encoded_url + '"' + curl_headers + ''
+if mode == "vpn":
+    def nsefetch(payload: str):
+        def encode(url: str) -> str:
+            if "%26" in url or "%20" in url:
+                return url
+            return urllib.parse.quote(url, safe=":/?&=")
+
+        def refresh_cookies():
+            os.popen(f'curl -c cookies.txt "https://www.nseindia.com" {curl_headers}').read()
+            os.popen(f'curl -b cookies.txt -c cookies.txt "https://www.nseindia.com/option-chain" {curl_headers}').read()
+
+        if not os.path.exists("cookies.txt"):
+            refresh_cookies()
+
+        encoded_url = encode(payload)
+        cmd = f'curl -b cookies.txt "{encoded_url}" {curl_headers}'
+        raw = os.popen(cmd).read()
+
         try:
-            output = os.popen(payload_var).read()
-            output=json.loads(output)
-        except ValueError:  # includes simplejson.decoder.JSONDecodeError:
-            payload2 = "https://www.nseindia.com"
-            output2 = os.popen('curl -c cookies.txt "'+payload2+'"'+curl_headers+'').read()
-    
-            output = os.popen(payload_var).read()
-            output=json.loads(output)
-        return output
+            return json.loads(raw)
+        except ValueError:
+            refresh_cookies()
+            raw = os.popen(cmd).read()
+            try:
+                return json.loads(raw)
+            except ValueError:
+                return {}
+
 if(mode=='local'):
     def nsefetch(payload):
+
         try:
-            output = requests.get(payload,headers=headers).json()
-            #print(output)
+            s = requests.Session()
+            s.get("https://www.nseindia.com", headers=headers, timeout=10)
+            s.get("https://www.nseindia.com/option-chain", headers=headers, timeout=10)
+            output = s.get(payload, headers=headers, timeout=10).json()
         except ValueError:
-            s =requests.Session()
-            output = s.get("http://nseindia.com",headers=headers)
-            output = s.get(payload,headers=headers).json()
+            output = {}
         return output
 
 
