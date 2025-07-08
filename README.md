@@ -24,7 +24,7 @@ There are two versions of NSEPython depending on the execution environment. Whil
 
 | NSEPython Edition          | Compatibility                | Tested Environments           |
 |---------------------------|-----------------------------|-------------------------------|
-| [Local Edition](https://github.com/aeron7/nsepython)    | Laptops (Windows 9, 10)     | Windows 9, Windows 10         |
+| [Local Edition](https://github.com/aeron7/nsepython)    | Laptops (Windows 11, 10)     | Windows 11, Windows 10         |
 | [Server Edition](https://github.com/aeron7/nsepythonserver)   | Servers (AWS, Google Colab, DigitalOcean) | AWS, Google Colab, DigitalOcean |
 
 ## Installation
@@ -33,7 +33,7 @@ Use the package manager [pip](https://pypi.org/project/nsepython/) to install ns
 
 #### [NSEPython Local Edition](https://github.com/aeron7/nsepython)
 
-Access NSEPython for laptops, specifically tailored for Windows 9 and Windows 10 compatibility.
+Access NSEPython for laptops, specifically tailored for Windows 11 and Windows 10 compatibility.
 
 
 ```bash
