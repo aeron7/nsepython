@@ -291,7 +291,7 @@ def nse_quote_ltp(symbol,expiryDate="latest",optionType="-",strikePrice=0):
 # print(nse_quote_ltp("RELIANCE","latest","PE",2300))
 # print(nse_quote_ltp("RELIANCE","next","PE",2300))
 
-def nse_quote_meta(symbol,expiryDate="latest",optionType="-",strikePrice=0):
+def nse_quote_meta(symbol, expiryDate="latest", optionType="-", strikePrice=0):
   payload = nse_quote(symbol)
   #https://stackoverflow.com/questions/7961363/removing-duplicates-in-lists
   #https://stackoverflow.com/questions/19199984/sort-a-list-in-python
@@ -314,23 +314,24 @@ def nse_quote_meta(symbol,expiryDate="latest",optionType="-",strikePrice=0):
   if(optionType=="PE"):optionType="Put"
   if(optionType=="CE"):optionType="Call"
 
-  if(optionType!="-"):
-      for i in payload['stocks']:
-        if meta in i['metadata']['instrumentType']:
-          #print(i['metadata'])
-          if(optionType=="Fut"):
-              if(i['metadata']['expiryDate']==expiryDate):
-                metadata = i['metadata']
+  metadata = None
 
-          if((optionType=="Put")or(optionType=="Call")):
-              if (i['metadata']["expiryDate"]==expiryDate):
-                if (i['metadata']["optionType"]==optionType):
-                  if (i['metadata']["strikePrice"]==strikePrice):
-                    #print(i['metadata'])
-                    metadata = i['metadata']
+  if optionType != "-":
+      for item in payload.get('stocks', []):
+          if meta in item['metadata']['instrumentType']:
+              if optionType == "Fut":
+                  if item['metadata']['expiryDate'] == expiryDate:
+                      metadata = item['metadata']
+                      break
 
-  if(optionType=="-"):
-      metadata = i['metadata']
+              if optionType in ("Put", "Call"):
+                  if (item['metadata']['expiryDate'] == expiryDate and
+                      item['metadata']['optionType'] == optionType and
+                      item['metadata']['strikePrice'] == strikePrice):
+                      metadata = item['metadata']
+                      break
+  else:
+      metadata = payload.get('metadata')
 
   return metadata
 
