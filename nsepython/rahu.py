@@ -100,7 +100,7 @@ def running_status():
     end_now=datetime.datetime.now().replace(hour=15, minute=30, second=0, microsecond=0)
     return start_now<datetime.datetime.now()<end_now
 
-#Getting FNO Symboles
+# Getting FNO Symbols
 def fnolist():
     # df = pd.read_csv("https://www1.nseindia.com/content/fo/fo_mktlots.csv")
     # return [x.strip(' ') for x in df.drop(df.index[3]).iloc[:,1].to_list()]
