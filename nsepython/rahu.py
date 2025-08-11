@@ -404,6 +404,50 @@ def nse_results(index="equities",period="Quarterly"):
     else:
         print("Give Correct Index Input")
 
+def nse_integrated_results(page=1, size=20, symbol=None, issuer=None, period_ended=None):
+    """
+    Fetch Integrated Filing - Financials from NSE's integrated filing results API.
+
+    Parameters:
+        page (int): Page number for paginated results. Default is 1.
+        size (int): Number of records per page. Default is 20.
+        symbol (str): Optional stock symbol (e.g., 'RELIANCE').
+        issuer (str): Optional issuer name (e.g., 'Reliance Industries Limited').
+        period_ended (str): Optional quarter end date (e.g., '30-Jun-2025').
+                            If None or 'all', fetches all periods.
+
+    Returns:
+        pandas.DataFrame with integrated filing results.
+    """
+
+    # Base URL
+    base_url = "https://www.nseindia.com/api/integrated-filing-results"
+
+    # Fixed params
+    params = {
+        "index": "equities",
+        "type": "Integrated Filing- Financials",
+        "page": page,
+        "size": size
+    }
+
+    # Add symbol if provided
+    if symbol:
+        params["symbol"] = symbol
+    if issuer:
+        params["issuer"] = issuer
+    # Add period_ended only if not 'all'
+    if period_ended and str(period_ended).lower() != "all":
+        params["period_ended"] = period_ended
+
+    # Build query string
+    query_str = "&".join(f"{key}={urllib.parse.quote(str(value))}" for key, value in params.items())
+    url = f"{base_url}?{query_str}"
+
+    # Fetch and normalize data
+    payload = nsefetch(url)
+    return pd.json_normalize(payload.get("data", [])).fillna('')
+
 def nse_events():
     output = nsefetch('https://www.nseindia.com/api/event-calendar')
     return pd.json_normalize(output)
