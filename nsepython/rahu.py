@@ -575,8 +575,9 @@ def black_scholes_dexter(S0,X,t,σ="",r=10,q=0.0,td=365):
 
 def equity_history_virgin(symbol,series,start_date,end_date):
     #url="https://www.nseindia.com/api/historical/cm/equity?symbol="+symbol+"&series=[%22"+series+"%22]&from="+str(start_date)+"&to="+str(end_date)+""
-    url = 'https://www.nseindia.com/api/historical/cm/equity?symbol=' + symbol + '&series=["' + series + '"]&from=' + start_date + '&to=' + end_date
-
+    #url = 'https://www.nseindia.com/api/historical/cm/equity?symbol=' + symbol + '&series=["' + series + '"]&from=' + start_date + '&to=' + end_date
+    url = 'https://www.nseindia.com/api/historicalOR/generateSecurityWiseHistoricalData?symbol=' + symbol + '&type=priceVolumeDeliverable' + '&series=' + series + '&from=' + start_date + '&to=' + end_date 
+    
     payload = nsefetch(url)
     return pd.DataFrame.from_records(payload["data"])
 
