@@ -974,43 +974,60 @@ def expiry_history(symbol,start_date="",end_date="",type="options"):
 
 # # Nifty Indicies Site
 
+# # Nifty Indicies Site
+
 niftyindices_headers = {
-    'Connection': 'keep-alive',
-    'sec-ch-ua': '" Not;A Brand";v="99", "Google Chrome";v="91", "Chromium";v="91"',
     'Accept': 'application/json, text/javascript, */*; q=0.01',
-    'DNT': '1',
-    'X-Requested-With': 'XMLHttpRequest',
-    'sec-ch-ua-mobile': '?0',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36',
-    'Content-Type': 'application/json; charset=UTF-8',
-    'Origin': 'https://niftyindices.com',
-    'Sec-Fetch-Site': 'same-origin',
-    'Sec-Fetch-Mode': 'cors',
-    'Sec-Fetch-Dest': 'empty',
-    'Referer': 'https://niftyindices.com/reports/historical-data',
     'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
+    'Content-Type': 'application/json; charset=UTF-8',
+    'Origin': 'https://www.niftyindices.com',
+    'Referer': 'https://www.niftyindices.com/reports/historical-data',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36',
+    'X-Requested-With': 'XMLHttpRequest',
+    'sec-ch-ua': '"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Windows"',
 }
 
-def index_history(symbol,start_date,end_date):
-    data = {'cinfo': "{'name':'" + symbol + "','startDate':'" + start_date + "','endDate':'" + end_date + "','indexName':'" + symbol + "'}"}
-    payload = requests.post('https://niftyindices.com/Backpage.aspx/getHistoricaldatatabletoString', headers=niftyindices_headers,  json=data).json()
-    payload = json.loads(payload["d"])
-    payload=pd.DataFrame.from_records(payload)
-    return payload
+def _niftyindices_fetch(endpoint, symbol, start_date, end_date):
+    session = requests.Session()
+    session.get(
+        "https://www.niftyindices.com/reports/historical-data",
+        headers=niftyindices_headers,
+        timeout=15,
+    )
 
-def index_pe_pb_div(symbol,start_date,end_date):
-    data = {'cinfo': "{'name':'" + symbol + "','startDate':'" + start_date + "','endDate':'" + end_date + "','indexName':'" + symbol + "'}"}
-    payload = requests.post('https://niftyindices.com/Backpage.aspx/getpepbHistoricaldataDBtoString', headers=niftyindices_headers,  json=data).json()
-    payload = json.loads(payload["d"])
-    payload=pd.DataFrame.from_records(payload)
-    return payload
+    data = {
+        'cinfo': "{'name':'" + symbol + "','startDate':'" + start_date + "','endDate':'" + end_date + "','indexName':'" + symbol + "'}"
+    }
 
-def index_total_returns(symbol,start_date,end_date):
-    data = {'cinfo': "{'name':'" + symbol + "','startDate':'" + start_date + "','endDate':'" + end_date + "','indexName':'" + symbol + "'}"}
-    payload = requests.post('https://niftyindices.com/Backpage.aspx/getTotalReturnIndexString', headers=niftyindices_headers,  json=data).json()
-    payload = json.loads(payload["d"])
-    payload=pd.DataFrame.from_records(payload)
-    return payload
+    response = session.post(
+        f"https://www.niftyindices.com/BackPage/{endpoint}",
+        headers=niftyindices_headers,
+        json=data,
+        timeout=15,
+    )
+
+    text = response.text.strip()
+    if text.startswith('<!DOCTYPE') or text.startswith('<html'):
+        raise ValueError("Nifty Indices returned HTML instead of JSON.")
+
+    payload = response.json()
+
+    # Old API wrapped data in {"d": "..."}; new API returns a direct array
+    if isinstance(payload, dict) and "d" in payload:
+        payload = json.loads(payload["d"])
+
+    return pd.DataFrame.from_records(payload)
+
+def index_history(symbol, start_date, end_date):
+    return _niftyindices_fetch("getHistoricaldatatabletoString", symbol, start_date, end_date)
+
+def index_pe_pb_div(symbol, start_date, end_date):
+    return _niftyindices_fetch("getpepbHistoricaldataDBtoString", symbol, start_date, end_date)
+
+def index_total_returns(symbol, start_date, end_date):
+    return _niftyindices_fetch("getTotalReturnIndexString", symbol, start_date, end_date)
 
 def get_bhavcopy(date):
     date = date.replace("-","")
