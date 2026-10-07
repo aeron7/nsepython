@@ -288,7 +288,18 @@ curl_headers = ''' -H "authority: beta.nseindia.com" -H "cache-control: max-age=
 run_time=datetime.datetime.now()
 
 #Constants
-indices = ['NIFTY','FINNIFTY','BANKNIFTY']
+#
+# Round 3: NSE has since added live F&O index-derivative products beyond
+# the original 3 (confirmed live -- getSymbolDerivativesData&symbol=
+# MIDCPNIFTY and &symbol=NIFTYNXT50 both return real, actively-traded
+# CE/PE records right now, 2026-10). nse_quote()'s own `any(x in symbol
+# for x in indices)` substring check already happened to work for these by
+# accident (both names contain the substring "NIFTY"), but fnolist()'s
+# exact-membership check (used by nse_quote_derivatives()) did not, which
+# silently made nse_quote_ltp()/nse_quote_meta() return 0/{} for these
+# symbols instead of real data. Listed explicitly here (not just relying on
+# substring luck) so fnolist() membership works for them too.
+indices = ['NIFTY','FINNIFTY','BANKNIFTY','MIDCPNIFTY','NIFTYNXT50']
 
 def running_status():
     start_now=datetime.datetime.now().replace(hour=9, minute=15, second=0, microsecond=0)
@@ -440,21 +451,47 @@ def oi_chain_builder(symbol,expiry="latest",oi_mode="full"):
 
 def nse_quote_derivatives(symbol):
     symbol = nsesymbolpurify(symbol)
-    if symbol.upper() in fnolist():
-        payload = nsefetch('https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolDerivativesData&symbol='+symbol)
+    # Round 3 bug fix: the membership check below was correctly
+    # case-insensitive (symbol.upper() in fnolist()) but the URL built right
+    # after it used the original, un-uppercased `symbol` -- the live
+    # getSymbolDerivativesData endpoint is itself case-sensitive, so a
+    # lowercase/mixed-case symbol (e.g. "sbin", "banknifty") silently came
+    # back as {'data': [], 'timestamp': ''} (a plausible-looking empty
+    # response, not an error) instead of real data. Uppercase once and reuse
+    # it for both the check and the fetch.
+    symbol_u = symbol.upper()
+    if symbol_u in fnolist():
+        payload = nsefetch('https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolDerivativesData&symbol='+symbol_u)
         return payload
     else:
         return {"error": f"{symbol} is not in derivatives list."}
 
 def nse_quote(symbol,section=""):
-    #https://forum.unofficed.com/t/nsetools-get-quote-is-not-fetching-delivery-data-and-delivery-can-you-include-this-as-part-of-feature-request/1115/4    
+    #https://forum.unofficed.com/t/nsetools-get-quote-is-not-fetching-delivery-data-and-delivery-can-you-include-this-as-part-of-feature-request/1115/4
+    #
+    # section='' (default) already returns the FULL detail in one call --
+    # metaData/secInfo/priceInfo/orderBook/tradeInfo are all present together
+    # in that single payload. Only pass section= for a genuine sub-slice:
+    #   'trade_info'    -- order-book depth / VaR margin slice
+    #   'preOpenMarket' -- the day's 09:00-09:08 IST pre-open auction ladder
+    # Round 3 research (checked against unofficed.com's own docs, the
+    # hi-imcodeman/stock-nse-india reference TS implementation, and this
+    # project's entire GitHub issue history) found no evidence NSE's old API
+    # ever accepted any OTHER section= value -- 'preOpenMarket'/'metadata'/
+    # 'industryInfo'/'info'/'priceInfo'/'securityInfo' were never alternate
+    # query values, just top-level keys inside the un-sectioned response
+    # section='' already returns.
     symbol = nsesymbolpurify(symbol)
+    # Round 3 bug fix: this substring check used to be case-sensitive, so a
+    # lowercase/mixed-case index name (e.g. "banknifty") fell through to the
+    # equity branch below and 404'd (banknifty isn't an equity symbol).
+    symbol_u = symbol.upper()
 
     if(section==""):
-        if any(x in symbol for x in indices):
-            payload = nsefetch('https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolDerivativesData&symbol='+symbol)
+        if any(x in symbol_u for x in indices):
+            payload = nsefetch('https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolDerivativesData&symbol='+symbol_u)
         else:
-            payload = nsefetch('https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolData&marketType=N&series=EQ&symbol='+symbol)
+            payload = nsefetch('https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolData&marketType=N&series=EQ&symbol='+symbol_u)
         return payload
 
     if(section=="trade_info"):
@@ -480,7 +517,14 @@ def nse_quote(symbol,section=""):
         #   - securityWiseDP.seriesRemarks: no equivalent field exists in
         #     the new response -> always None, same as it is for most
         #     symbols on the old route anyway.
-        payload = nsefetch('https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolData&marketType=N&series=EQ&symbol='+symbol)
+        payload = nsefetch('https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolData&marketType=N&series=EQ&symbol='+symbol_u)
+        if 'equityResponse' not in payload or not payload['equityResponse']:
+            raise NSEEndpointError(
+                f"nse_quote({symbol!r}, section='trade_info'): no "
+                f"equityResponse in payload -- this section is only "
+                f"meaningful for an equity symbol (not an index/derivative "
+                f"underlying)."
+            )
         eq = payload['equityResponse'][0]
         ob = eq.get('orderBook', {})
         md = eq.get('metaData', {})
@@ -529,12 +573,49 @@ def nse_quote(symbol,section=""):
             },
         }
 
-    if(section!=""):
-        # Any other section value (e.g. the old "preOpenMarket") still hits
-        # the dead /api/quote-equity&section= route -- not yet remapped to
-        # a working source. Only trade_info was confirmed+fixed this round.
-        payload = nsefetch('https://www.nseindia.com/api/quote-equity?symbol='+symbol+'&section='+section)
-        return payload
+    if(section=="preOpenMarket"):
+        # Round 3: NSE's old /api/quote-equity&section=preOpenMarket route
+        # is dead (confirmed HTTP 403, same wall as every other section
+        # value below), but a genuinely live, working replacement exists:
+        # /api/market-data-pre-open?key=ALL returns ALL ~2200 symbols' real
+        # pre-open order-book ladders in one shot. Filter it down to the
+        # requested symbol instead of fabricating anything.
+        #
+        # Caveat (documented, not disguised): this is literally the
+        # 09:00-09:08 IST pre-open auction snapshot, not continuous/live
+        # intraday data -- checked well after market open it will look
+        # "stale" because it reflects that morning's last pre-open auction.
+        # That is the real, live content of this feed, not a bug.
+        payload = nsefetch('https://www.nseindia.com/api/market-data-pre-open?key=ALL')
+        for entry in payload.get('data', []):
+            if entry.get('metadata', {}).get('symbol') == symbol_u:
+                return entry['detail']['preOpenMarket']
+        raise NSEEndpointError(
+            f"nse_quote({symbol!r}, section='preOpenMarket'): {symbol_u} was "
+            f"not found in today's pre-open-market list -- either it isn't a "
+            f"pre-open-eligible series, or today's pre-open session hasn't "
+            f"run/populated yet."
+        )
+
+    # Round 3: every other section value (e.g. the old 'metadata'/
+    # 'industryInfo'/'info'/'priceInfo'/'securityInfo') used to fall through
+    # here and hit the dead /api/quote-equity&section=X route -- a ~5s
+    # double-retry ending in a misleading HTTP 403, for a route that was
+    # never real in the first place. Checked against unofficed.com's own
+    # docs, the hi-imcodeman/stock-nse-india reference implementation, and
+    # this project's full GitHub issue history: NSE's API never accepted
+    # any section value beyond 'trade_info' -- those other names are just
+    # top-level keys inside the un-sectioned response, already returned in
+    # full by nse_quote(symbol) (section=""). Raise immediately and clearly
+    # instead of a slow, confusing network round-trip to a route that was
+    # never real.
+    raise ValueError(
+        f"nse_quote: unsupported section={section!r}; only '' (full quote), "
+        f"'trade_info', and 'preOpenMarket' are supported -- NSE's old "
+        f"quote-equity API never had other section values. section='' "
+        f"already returns the full detail (metaData/secInfo/priceInfo/"
+        f"orderBook/tradeInfo all together)."
+    )
 def nse_expirydetails(payload, i=0, symbol=None):
     expiry_dates = []
     if 'records' in payload:
@@ -581,17 +662,45 @@ def nse_expirydetails(payload, i=0, symbol=None):
     date_today = run_time.date()
     dte = (currentExpiry_dt - date_today).days
     return currentExpiry_dt, dte
+
+def _pcr_entry_oi(entry):
+    """Round 3 fix: pcr() must accept BOTH option-chain shapes this library
+    can hand it --
+      - the NESTED per-strike shape nse_optionchain_scrapper()/option_chain()
+        return: {'strikePrice','expiryDate','CE':{...},'PE':{...}}
+      - the FLAT per-contract-leg shape nse_quote_derivatives()/nse_quote()
+        (for derivatives) actually return now: each entry IS one leg
+        directly, with optionType=='CE'/'PE' and openInterest at the TOP
+        LEVEL -- there is no nested entry['CE']/entry['PE'] in this shape at
+        all.
+    Before this fix, pcr()'s aggregation loop only ever read entry['CE']/
+    entry['PE'], so feeding it the flat shape matched the target expiry
+    (found_data=True) but silently added 0 to both ce_oi/pe_oi every time,
+    returning a plausible-looking-but-wrong pcr of 0.0 instead of raising.
+    Returns (ce_oi_contribution, pe_oi_contribution) for one entry.
+    """
+    if ('CE' in entry) or ('PE' in entry):
+        ce = entry['CE'].get('openInterest', 0) or 0 if entry.get('CE') else 0
+        pe = entry['PE'].get('openInterest', 0) or 0 if entry.get('PE') else 0
+        return ce, pe
+    if entry.get('optionType') == 'CE':
+        return entry.get('openInterest', 0) or 0, 0
+    if entry.get('optionType') == 'PE':
+        return 0, entry.get('openInterest', 0) or 0
+    return 0, 0
+
 def pcr(payload, inp=0):
     ce_oi = 0
     pe_oi = 0
-    
+
     # Identify the data and expiry dates based on structure
     if 'records' in payload:
         # Legacy structure
         data_list = payload['records']['data']
         expiry_dates = payload['records']['expiryDates']
     elif 'data' in payload:
-        # New structure
+        # New structure (covers BOTH the nested per-strike shape and the
+        # flat per-contract-leg shape -- see _pcr_entry_oi() above)
         data_list = payload['data']
         # Extract unique sorted expiry dates from data
         unique_dates = set()
@@ -601,9 +710,16 @@ def pcr(payload, inp=0):
                 unique_dates.add(ed)
         expiry_dates = sorted(list(unique_dates), key=lambda x: datetime.datetime.strptime(x, "%d-%m-%Y") if "-" in x and x.split("-")[1].isdigit() else datetime.datetime.strptime(x, "%d-%b-%Y"))
     else:
-        # If payload is empty or unknown, we can't proceed without fetching
-        # But we need a symbol. Try to get it from payload if possible.
-        return 0.0
+        # Round 3: a payload with neither 'records' nor 'data' isn't a
+        # recognizable option-chain/derivatives shape at all -- returning
+        # 0.0 here used to silently look like "zero put/call OI" instead of
+        # "this isn't option-chain data". Raise clearly instead.
+        raise NSEEndpointError(
+            "pcr(): payload has neither 'records' nor 'data' -- pass the "
+            "output of option_chain()/nse_optionchain_scrapper(), "
+            "nse_quote_derivatives(), or nse_quote() for a derivatives "
+            "symbol."
+        )
 
     if not expiry_dates or inp >= len(expiry_dates):
         # Requested index is outside the current payload's scope.
@@ -611,8 +727,10 @@ def pcr(payload, inp=0):
         symbol = payload.get('symbol') or payload.get('records', {}).get('symbol')
         if not symbol and 'data' in payload and len(payload['data']) > 0:
              first = payload['data'][0]
-             symbol = first.get('symbol') or (first.get('CE') and first['CE'].get('underlying'))
-        
+             symbol = (first.get('symbol') or first.get('underlying')
+                       or (first.get('CE') and first['CE'].get('underlying'))
+                       or (first.get('PE') and first['PE'].get('underlying')))
+
         if symbol and inp > 0:
             # Fetch all expiries to find the target one
             all_expiries = expiry_list(symbol, type="list")
@@ -629,17 +747,16 @@ def pcr(payload, inp=0):
         return 0.0
         
     target_expiry = expiry_dates[inp]
-    
+
     found_data = False
     for i in data_list:
         curr_exp = i.get('expiryDate') or i.get('expiryDates')
         if curr_exp == target_expiry:
             found_data = True
             try:
-                if 'CE' in i and i['CE']:
-                    ce_oi += i['CE'].get('openInterest', 0)
-                if 'PE' in i and i['PE']:
-                    pe_oi += i['PE'].get('openInterest', 0)
+                c, p = _pcr_entry_oi(i)
+                ce_oi += c
+                pe_oi += p
             except (KeyError, TypeError):
                 pass
     
@@ -663,13 +780,17 @@ def pcr(payload, inp=0):
 #forum.unofficed.com/t/unable-to-find-nse-quote-meta-api/702/4
 #Refer https://forum.unofficed.com/t/changed-the-nse-quote-ltp-function/1276
 def nse_quote_ltp(symbol,expiryDate="latest",optionType="-",strikePrice=0):
+  # Round 3 bug fix: this index-routing check was case-sensitive, so e.g.
+  # nse_quote_ltp("banknifty") (no optionType) missed the indices branch,
+  # fell through to the equity getSymbolData endpoint, and 404'd. Checking
+  # against symbol.upper() routes it correctly regardless of case.
   if(optionType!="-"):
       payload = nse_quote_derivatives(symbol)
   else:
-      if any(x in symbol for x in indices):
+      if any(x in symbol.upper() for x in indices):
           payload = nse_quote_derivatives(symbol)
       else:
-          payload = nsefetch('https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolData&marketType=N&series=EQ&symbol='+symbol)
+          payload = nsefetch('https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolData&marketType=N&series=EQ&symbol='+symbol.upper())
 
   lastPrice = 0
 
@@ -763,19 +884,36 @@ def nse_quote_ltp(symbol,expiryDate="latest",optionType="-",strikePrice=0):
 # print(nse_quote_ltp("RELIANCE","next","PE",2300))
 
 def nse_quote_meta(symbol,expiryDate="latest",optionType="-",strikePrice=0):
+  # Round 3 bug fix: case-sensitive index routing (see nse_quote_ltp()).
   if(optionType!="-"):
       payload = nse_quote_derivatives(symbol)
   else:
-      if any(x in symbol for x in indices):
+      if any(x in symbol.upper() for x in indices):
           payload = nse_quote_derivatives(symbol)
       else:
-          payload = nsefetch('https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolData&marketType=N&series=EQ&symbol='+symbol)
+          payload = nsefetch('https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolData&marketType=N&series=EQ&symbol='+symbol.upper())
 
   metadata = {}
 
   if(optionType=="-"):
       if 'equityResponse' in payload and len(payload['equityResponse']) > 0:
           metadata = payload['equityResponse'][0].get('metaData', {})
+      elif 'data' in payload and len(payload['data']) > 0:
+          # Round 3 fix (known gap #2): index/derivative underlyings go
+          # through nse_quote_derivatives()'s flat per-contract-leg shape,
+          # which has no 'equityResponse'/'metaData' at all -- this used to
+          # silently fall through to the {} default, making every index
+          # symbol look like "no data" instead of "wrong shape for this
+          # accessor". There is no equity-style open/high/low/close
+          # snapshot anywhere in this payload for an index (only
+          # underlyingValue/underlying/timestamp per leg), so we return the
+          # real fields that DO exist instead of fabricating the rest.
+          first = payload['data'][0]
+          metadata = {
+              "symbol": first.get('underlying') or symbol.upper(),
+              "underlyingValue": first.get('underlyingValue'),
+              "timestamp": payload.get('timestamp'),
+          }
       return metadata
 
   meta = "Options"
@@ -845,15 +983,113 @@ def nse_quote_meta(symbol,expiryDate="latest",optionType="-",strikePrice=0):
   return metadata
 
 def nse_optionchain_ltp(payload,strikePrice,optionType,inp=0,intent=""):
-    expiry_dates = payload['records']['expiryDates']
-    expiry_dates = [datetime.datetime.strptime(date, "%d-%b-%Y").date() for date in expiry_dates]
-    expiry_dates = [date.strftime("%d-%b-%Y") for date in expiry_dates if date >= datetime.datetime.now().date()]
-    expiryDate=expiry_dates[inp]
-    for x in range(len(payload['records']['data'])):
-      if((payload['records']['data'][x]['strikePrice']==strikePrice) & (payload['records']['data'][x]['expiryDate']==expiryDate)):
-          if(intent==""): return payload['records']['data'][x][optionType]['lastPrice']
-          if(intent=="sell"): return payload['records']['data'][x][optionType]['bidprice']
-          if(intent=="buy"): return payload['records']['data'][x][optionType]['askPrice']
+    # Round 3 bug fix (new finding, highest severity found this round): this
+    # function unconditionally indexed payload['records'] -- the pre-rewrite
+    # legacy NSE shape. option_chain()/nse_optionchain_scrapper() (this
+    # library's OWN current option-chain source, since round 1) return
+    # {'data': [...], 'timestamp': ...} instead -- 'records' doesn't exist
+    # anywhere in the live code path any more, so this function could never
+    # succeed with real data produced by this library: every call crashed
+    # with KeyError('records'), unconditionally.
+    if 'records' in payload:
+        # Legacy shape, kept for any caller handing in an old-style cached
+        # payload captured before this library's rewrite.
+        expiry_dates = payload['records']['expiryDates']
+        expiry_dates = [datetime.datetime.strptime(date, "%d-%b-%Y").date() for date in expiry_dates]
+        expiry_dates = [date.strftime("%d-%b-%Y") for date in expiry_dates if date >= datetime.datetime.now().date()]
+        if inp >= len(expiry_dates):
+            raise NSEEndpointError(
+                f"nse_optionchain_ltp(): requested expiry index {inp} is out "
+                f"of range -- only {len(expiry_dates)} future expiries found."
+            )
+        expiryDate = expiry_dates[inp]
+        for x in range(len(payload['records']['data'])):
+            row = payload['records']['data'][x]
+            if (row['strikePrice'] == strikePrice) and (row['expiryDate'] == expiryDate):
+                leg = row[optionType]
+                if(intent==""): return leg['lastPrice']
+                if(intent=="sell"): return leg['bidprice']
+                if(intent=="buy"): return leg['askPrice']
+        return None
+
+    if 'data' in payload:
+        # Current shape: option_chain()/nse_optionchain_scrapper()'s flat
+        # 'data' list, each entry already grouped per-strike with 'CE'/'PE'
+        # sub-dicts (see nse_optionchain_scrapper()'s combine step) --
+        # strikePrice/expiryDate live on the outer entry, the price fields
+        # live inside entry[optionType].
+        data_list = payload['data']
+
+        def _parse_exp(d):
+            try:
+                if "-" in d and d.split("-")[1].isdigit():
+                    return datetime.datetime.strptime(d, "%d-%m-%Y").date()
+                return datetime.datetime.strptime(d, "%d-%b-%Y").date()
+            except Exception:
+                return None
+
+        unique_dates = sorted(
+            {e.get('expiryDate') for e in data_list if e.get('expiryDate')},
+            key=lambda d: _parse_exp(d) or datetime.date.max,
+        )
+        today = datetime.datetime.now().date()
+        future_dates = [d for d in unique_dates if (_parse_exp(d) or today) >= today]
+        if inp >= len(future_dates):
+            raise NSEEndpointError(
+                f"nse_optionchain_ltp(): requested expiry index {inp} is out "
+                f"of range -- only {len(future_dates)} future expiries found "
+                f"in this payload."
+            )
+        expiryDate = future_dates[inp]
+
+        try:
+            target_strike = float(str(strikePrice).strip())
+        except Exception:
+            target_strike = None
+
+        for entry in data_list:
+            if entry.get('expiryDate') != expiryDate:
+                continue
+            try:
+                entry_strike = float(str(entry.get('strikePrice')).strip())
+            except Exception:
+                continue
+            if target_strike is not None and entry_strike != target_strike:
+                continue
+            if 'optionType' in entry and 'CE' not in entry and 'PE' not in entry:
+                # Flat per-leg shape (nse_quote_derivatives()/nse_quote()'s
+                # getSymbolDerivativesData output): each list entry IS one
+                # CE or PE leg directly (entry['optionType'] == 'CE'/'PE',
+                # price fields on the entry itself) rather than one entry
+                # per strike holding both legs nested under entry['CE']/
+                # entry['PE']. Round-3 bug (confirmed live, fixed here):
+                # entry.get(optionType) always returned None for this shape
+                # since there's no such nested key on a flat leg.
+                if entry.get('optionType') != optionType:
+                    continue
+                leg = entry
+            else:
+                leg = entry.get(optionType)
+            if not leg:
+                continue
+            if intent == "":
+                return leg.get('lastPrice')
+            if intent == "sell":
+                # The live getSymbolDerivativesData-backed payload carries
+                # no bid/ask order-book fields at all (confirmed live) --
+                # only the legacy 'records' shape had bidprice/askPrice.
+                # This is a genuine data-availability gap, not a lookup
+                # bug: returns None rather than guessing a price.
+                return leg.get('buyPrice1', leg.get('bidprice'))
+            if intent == "buy":
+                return leg.get('sellPrice1', leg.get('askPrice'))
+        return None
+
+    raise NSEEndpointError(
+        "nse_optionchain_ltp(): payload has neither 'records' nor 'data' -- "
+        "pass the output of option_chain()/nse_optionchain_scrapper() "
+        "directly."
+    )
 
 def nse_eq(symbol):
     symbol = nsesymbolpurify(symbol)
@@ -916,10 +1152,22 @@ def option_chain(symbol):
     return nse_optionchain_scrapper(symbol)
 
 def nse_holidays(type="trading"):
+    # Round 3 bug fix: these were two independent `if`s with no `else`, so
+    # any type other than exactly "trading"/"clearing" left `payload` never
+    # assigned, and `return payload` blew up with an unrelated-looking
+    # UnboundLocalError instead of a clear "invalid type" message. Confirmed
+    # live that NSE's own /api/holiday-master endpoint only accepts these
+    # two type values (anything else comes back HTTP 200 with a zero-length
+    # body) -- so raise a clear, descriptive error for anything else.
     if(type=="clearing"):
         payload = nsefetch('https://www.nseindia.com/api/holiday-master?type=clearing')
-    if(type=="trading"):
+    elif(type=="trading"):
         payload = nsefetch('https://www.nseindia.com/api/holiday-master?type=trading')
+    else:
+        raise ValueError(
+            f"nse_holidays: invalid type={type!r} -- NSE's holiday-master "
+            f"API only supports type='trading' or type='clearing'."
+        )
     return payload
 
 def holiday_master(type="trading"):
@@ -1128,6 +1376,22 @@ def black_scholes_dexter(S0,X,t,σ="",r=10,q=0.0,td=365):
   S0,X,σ,r,q,t = float(S0),float(X),float(σ/100),float(r/100),float(q/100),float(t/td)
   #https://unofficed.com/black-scholes-model-options-calculator-google-sheet/
 
+  # Round 3 bug fix: t=0 (an option literally expiring today, a completely
+  # normal real-world input given NSE's weekly expiries) used to raise a
+  # raw, uncaught ZeroDivisionError from sigma*sqrt(t) in d1's denominator.
+  # This is a genuine math-domain limit of the Black-Scholes formula (it's
+  # undefined at t=0), not an NSE-API issue -- so raise a clear, descriptive
+  # error pointing the caller at intrinsic value instead of a bare
+  # ZeroDivisionError.
+  if t <= 0:
+      raise ValueError(
+          f"black_scholes_dexter: t={t*td:g} days to expiry must be > 0 -- "
+          f"Black-Scholes delta/gamma/theta/vega are undefined at t=0 (an "
+          f"option expiring today). Use intrinsic value "
+          f"(max(S0-X,0) for a call / max(X-S0,0) for a put) directly "
+          f"instead for a same-day expiry."
+      )
+
   d1 = (math.log(S0/X)+(r-q+0.5*σ**2)*t)/(σ*math.sqrt(t))
   #stackoverflow.com/questions/34258537/python-typeerror-unsupported-operand-types-for-float-and-int
 
@@ -1304,7 +1568,6 @@ def derivative_history(symbol,start_date,end_date,instrumentType,expiry_date,str
 
 
 def expiry_history(symbol,start_date="",end_date="",type="options"):
-    if(end_date==""):end_date=end_date
     # Same retirement as derivative_history_virgin()/equity_history_virgin()
     # above -- /api/historical/* is gone, /api/historicalOR/* is the working
     # replacement with an identical response shape.
@@ -1313,6 +1576,7 @@ def expiry_history(symbol,start_date="",end_date="",type="options"):
 
     #print(payload)
 
+    payload_data = None
     for key, value in payload['expiryDatesByInstrument'].items():
       if type.lower() == "options" and "OPT" in key:
           payload_data = payload['expiryDatesByInstrument'][key]
@@ -1320,7 +1584,20 @@ def expiry_history(symbol,start_date="",end_date="",type="options"):
       elif type.lower() == "futures" and "FUT" in key:
           payload_data =  payload['expiryDatesByInstrument'][key]
           break
-    
+
+    if payload_data is None:
+        return []
+
+    # Round 3 bug fix: calling this with its own documented defaults (no
+    # dates -- expiry_history("NIFTY")) used to crash unconditionally with
+    # `ValueError: time data '' does not match format '%d-%m-%Y'`, because
+    # start_date/end_date default to "" but got passed straight into
+    # strptime with no blank-check. Confirmed live that the endpoint itself
+    # already handles blank from/to by returning the full unfiltered expiry
+    # list -- so short-circuit and return that directly instead of crashing.
+    if start_date == "" or end_date == "":
+        return payload_data
+
     # Convert start_date and end_date to datetime objects
     start_date = datetime.datetime.strptime(start_date, "%d-%m-%Y")
     end_date = datetime.datetime.strptime(end_date, "%d-%m-%Y")
@@ -1329,7 +1606,7 @@ def expiry_history(symbol,start_date="",end_date="",type="options"):
     filtered_date_payload = []
 
     # Initialize a flag to check if the first date after end_date has been added
-    added_after_end_date = False    
+    added_after_end_date = False
 
     # Iterate through date_payload and filter dates within the range
     for date_str in payload_data:
@@ -1339,7 +1616,7 @@ def expiry_history(symbol,start_date="",end_date="",type="options"):
         elif date_obj > end_date and not added_after_end_date:
             filtered_date_payload.append(date_str)
             added_after_end_date = True
-    
+
     return filtered_date_payload
 
 # # Nifty Indicies Site
@@ -1592,8 +1869,13 @@ def nse_preopen(key="NIFTY",type="pandas"):
 
 #By Avinash https://forum.unofficed.com/t/nsepython-documentation/376/102?u=dexter
 def nse_preopen_movers(key="FO",filter=1.5):
+    # Round 3 bug fix: the body hardcoded the literal 1.5/-1.5 thresholds
+    # instead of using the `filter` parameter at all -- any caller passing
+    # a custom threshold (nse_preopen_movers(key="FO", filter=50)) got
+    # silently ignored and always got the same 1.5% cutoff back, with no
+    # error or warning.
     preOpen_gainer=nse_preopen(key)
-    return preOpen_gainer[preOpen_gainer['pChange'] >1.5],preOpen_gainer[preOpen_gainer['pChange'] <-1.5]
+    return preOpen_gainer[preOpen_gainer['pChange'] >filter],preOpen_gainer[preOpen_gainer['pChange'] <-filter]
 
 # type = "securities"
 # type = "etf"
@@ -1673,8 +1955,20 @@ def nse_largedeals_historical(from_date, to_date, mode="bulk_deals"):
 #print(get_fao_participant_oi("04-06-2021"))
 def get_fao_participant_oi(date):
     date = date.replace("-","")
-    payload = pd.read_csv(io.StringIO(_nse_fetch_csv_text(
-        "https://archives.nseindia.com/content/nsccl/fao_participant_oi_"+date+".csv")))
+    # Round 3 bug fix: this CSV has a title/caption row as line 1
+    # ('""Participant wise Open Interest...""') with the REAL header on
+    # line 2 -- reading it with no skiprows made pandas parse the caption
+    # as the header and shift the real header row down into the data,
+    # mislabeling every single column (confirmed live on every trading date
+    # tested: columns came out as 'Unnamed: 2', 'Unnamed: 3', etc instead of
+    # 'Future Index Long', 'Total Short Contracts', ...).
+    text = _nse_fetch_csv_text(
+        "https://archives.nseindia.com/content/nsccl/fao_participant_oi_"+date+".csv")
+    payload = pd.read_csv(io.StringIO(text), skiprows=1)
+    # NSE's own header row carries stray trailing whitespace on a couple of
+    # columns (e.g. "Future Stock Short       ") -- strip it so column
+    # lookups by name work as documented.
+    payload.columns = [c.strip() for c in payload.columns]
     return payload
 
 #https://forum.unofficed.com/t/how-to-check-if-the-market-is-open-today-or-not/1268/1
@@ -1756,3 +2050,653 @@ def security_wise_archive(from_date, to_date, symbol, series="ALL"):
     url = f"{base_url}?from={from_date}&to={to_date}&symbol={symbol.upper()}&type=priceVolumeDeliverable&series={series.upper()}"
     payload = nsefetch(url)
     return pd.DataFrame(payload['data'])
+
+
+# ---------------------------------------------------------------------------
+# NSE's official, no-auth MCP (Model Context Protocol) servers
+#
+# NSE India publishes its own free, no-API-key-required MCP servers
+# (https://www.nseindia.com/nse-mcp) -- two streamable-HTTP endpoints:
+#
+#   "bhavcopy" -- https://mcp.nseindia.in/bhavcopy/cm/mcp
+#       ("nse-bhavcopy-redis-mcp", 21 tools): historical/derived data --
+#       stock & index history, valuations, corporate actions, comparisons,
+#       moving averages, 52-week range, market mood/breadth, symbol search.
+#
+#   "cmmkt" -- https://mcp.nseindia.in/cmmkt/mcp
+#       ("cm-market-mcp", 15 tools): live cash-market data -- live quotes,
+#       gainers/losers, live index values, equity/SME/bond/call-auction
+#       stock lists.
+#
+# This is a genuinely different, independent path into NSE data from the
+# rest of this module: it is NSE's own hosted service, not a scrape of
+# nseindia.com through curl_cffi's Akamai-impersonation transport, so it is
+# unaffected by Akamai Bot Manager entirely and is often the more reliable
+# choice when it covers the data you need. It still reuses this module's
+# shared curl_cffi session (_get_nse_session()) purely for cheap connection
+# pooling / one consistent TLS-fingerprint story -- the MCP calls themselves
+# need no cookies, no warm-up, and no auth of any kind.
+#
+# Protocol notes (streamable-HTTP MCP, JSON-RPC 2.0):
+#   - POST an "initialize" request first; the response carries a
+#     "Mcp-Session-Id" (or "mcp-session-id") header that must be echoed back
+#     as a header on every subsequent request for that session.
+#   - A "notifications/initialized" notification should follow (no response
+#     body expected) before calling any tool.
+#   - "tools/call" responses come back either as plain JSON or as an
+#     SSE-framed body (Content-Type: text/event-stream) shaped like
+#     "event:message\ndata:{...}\n\n" -- both are handled below.
+#   - The actual tool result is nested at result.content[0].text, which is
+#     itself a JSON string in practice for every tool checked so far.
+#   - A small number of tools (confirmed: nse_get_gainers / nse_get_losers
+#     on the cmmkt server) currently come back with isError=false but an
+#     inner {"error": "..."} payload -- a live bug on NSE's own server side
+#     ("Failed to parse cached data: ArrayList cannot be cast to Map").
+#     That is treated the same as any other failure here: raised as
+#     NSEEndpointError rather than silently handed back as "data".
+# ---------------------------------------------------------------------------
+
+_NSE_MCP_SERVERS = {
+    "bhavcopy": "https://mcp.nseindia.in/bhavcopy/cm/mcp",
+    "cmmkt": "https://mcp.nseindia.in/cmmkt/mcp",
+}
+
+_NSE_MCP_CLIENT_VERSION = "2.98"
+
+# Lightweight session-id cache, keyed by server URL, so repeated calls to the
+# same MCP server don't re-run the "initialize" handshake every time.
+_nse_mcp_session_cache = {}
+
+
+def _nse_mcp_parse_response(r):
+    """Parse one MCP HTTP response body, which comes back as either plain
+    JSON or an SSE-framed body (Content-Type: text/event-stream) shaped like
+    "event:message\\ndata:{...}\\n\\n". Returns the decoded JSON-RPC envelope
+    dict either way.
+    """
+    ctype = r.headers.get("content-type", "") or ""
+    if "text/event-stream" in ctype:
+        data_lines = [
+            line[len("data:"):].strip()
+            for line in r.text.splitlines()
+            if line.startswith("data:")
+        ]
+        if not data_lines:
+            raise NSEEndpointError("nse_mcp: empty SSE response body")
+        try:
+            return json.loads("".join(data_lines))
+        except ValueError:
+            raise NSEEndpointError("nse_mcp: malformed SSE JSON payload")
+
+    try:
+        return r.json()
+    except ValueError:
+        # A server occasionally mislabels which framing it used -- scan for
+        # "data:" lines regardless of the declared content-type before
+        # giving up.
+        data_lines = [
+            line[len("data:"):].strip()
+            for line in r.text.splitlines()
+            if line.startswith("data:")
+        ]
+        if data_lines:
+            try:
+                return json.loads("".join(data_lines))
+            except ValueError:
+                pass
+        raise NSEEndpointError(
+            f"nse_mcp: non-JSON, non-SSE response body (content-type={ctype!r})"
+        )
+
+
+def _nse_mcp_initialize(server_url):
+    """Run the MCP "initialize" handshake (+ "notifications/initialized")
+    against server_url and return the Mcp-Session-Id NSE's server hands
+    back (or "" if the server doesn't issue one). Retries up to 3 times --
+    the bhavcopy endpoint has been observed to 502 on a cold first request.
+    """
+    session = _get_nse_session()
+    mcp_headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+    }
+    init_body = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "nsepython", "version": _NSE_MCP_CLIENT_VERSION},
+        },
+    }
+
+    last_exc = None
+    for attempt in range(3):
+        try:
+            r = session.post(server_url, headers=mcp_headers, json=init_body, timeout=30)
+        except Exception as e:
+            last_exc = NSEEndpointError(f"nse_mcp initialize: request failed for {server_url}: {e}")
+            continue
+
+        if r.status_code == 200:
+            session_id = r.headers.get("mcp-session-id") or r.headers.get("Mcp-Session-Id") or ""
+            notify_headers = dict(mcp_headers)
+            if session_id:
+                notify_headers["Mcp-Session-Id"] = session_id
+            try:
+                session.post(
+                    server_url, headers=notify_headers,
+                    json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+                    timeout=15,
+                )
+            except Exception:
+                pass  # fire-and-forget notification; failure here is harmless
+            return session_id
+
+        last_exc = NSEEndpointError(
+            f"nse_mcp initialize: HTTP {r.status_code} for {server_url}"
+        )
+
+    raise last_exc or NSEEndpointError(f"nse_mcp initialize: failed for {server_url}")
+
+
+def _nse_mcp_get_session_id(server_url, force_new=False):
+    """Return a cached Mcp-Session-Id for server_url, initializing (and
+    caching) one if there isn't one yet or force_new is requested.
+    """
+    if not force_new and server_url in _nse_mcp_session_cache:
+        return _nse_mcp_session_cache[server_url]
+    session_id = _nse_mcp_initialize(server_url)
+    _nse_mcp_session_cache[server_url] = session_id
+    return session_id
+
+
+def _nse_mcp_call(server_url, tool_name, arguments=None):
+    """Call one tool on an NSE-official MCP server and return its parsed
+    result payload.
+
+    Handles the initialize/session-id handshake (with a small cache keyed
+    by server_url so repeat calls don't re-initialize every time), both
+    plain-JSON and SSE response framing, and the nested
+    result.content[0].text tool-result convention (itself JSON-encoded for
+    every tool checked so far). Raises NSEEndpointError -- never returns
+    `{}` -- on any transport failure, JSON-RPC error, MCP tool-level error,
+    or an application-level {"error": ...} payload the tool itself reports.
+    """
+    arguments = arguments or {}
+    session = _get_nse_session()
+    mcp_headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+    }
+
+    data = None
+    last_exc = None
+    for attempt in (1, 2):
+        try:
+            session_id = _nse_mcp_get_session_id(server_url, force_new=(attempt == 2))
+        except NSEEndpointError as e:
+            last_exc = e
+            continue
+
+        call_headers = dict(mcp_headers)
+        if session_id:
+            call_headers["Mcp-Session-Id"] = session_id
+
+        body = {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": tool_name, "arguments": arguments},
+        }
+        try:
+            r = session.post(server_url, headers=call_headers, json=body, timeout=30)
+        except Exception as e:
+            last_exc = NSEEndpointError(f"nse_mcp_call({tool_name}): request failed: {e}")
+            continue
+
+        if r.status_code in (401, 403, 404, 409, 502, 503) and attempt == 1:
+            # Could be a stale/expired session id, or the transient 502 seen
+            # on the bhavcopy endpoint's first request -- drop the cached
+            # session and retry once with a fresh initialize.
+            last_exc = NSEEndpointError(
+                f"nse_mcp_call({tool_name}): HTTP {r.status_code} from {server_url}"
+            )
+            _nse_mcp_session_cache.pop(server_url, None)
+            continue
+
+        if r.status_code != 200:
+            raise NSEEndpointError(
+                f"nse_mcp_call({tool_name}): HTTP {r.status_code} from {server_url}"
+            )
+
+        data = _nse_mcp_parse_response(r)
+        last_exc = None
+        break
+
+    if data is None:
+        raise last_exc or NSEEndpointError(
+            f"nse_mcp_call({tool_name}): failed against {server_url}"
+        )
+
+    if data.get("error"):
+        raise NSEEndpointError(
+            f"nse_mcp_call({tool_name}): JSON-RPC error: {data['error']}"
+        )
+
+    result = data.get("result") or {}
+    content = result.get("content") or []
+    if not content:
+        raise NSEEndpointError(
+            f"nse_mcp_call({tool_name}): empty/missing content in response: {result}"
+        )
+
+    text = content[0].get("text", "")
+    try:
+        payload = json.loads(text)
+    except (ValueError, TypeError):
+        payload = text  # plain text/markdown tool result -- hand it back as-is
+
+    if result.get("isError"):
+        raise NSEEndpointError(
+            f"nse_mcp_call({tool_name}): tool reported an error: {payload}"
+        )
+
+    if isinstance(payload, dict) and "error" in payload:
+        # Seen live on nse_get_gainers/nse_get_losers: isError=false but an
+        # inner application-level error from NSE's own server. Don't hand
+        # this back as if it were usable data.
+        raise NSEEndpointError(
+            f"nse_mcp_call({tool_name}): NSE's MCP server reported an application "
+            f"error for this call: {payload['error']}"
+        )
+
+    return payload
+
+
+def nse_mcp_call(server, tool_name, **kwargs):
+    """Call ANY tool on NSE's own official, no-auth MCP servers by name --
+    a generic escape hatch for a tool this module doesn't have a named
+    wrapper for (yet), or any new tool NSE adds to either server in future.
+
+    `server` is "bhavcopy" (historical/derived data) or "cmmkt" (live
+    market data). `kwargs` become the tool's `arguments` object, passed
+    straight through to NSE's MCP endpoint -- see nse_mcp_list_tools() for
+    each tool's name, description and accepted arguments.
+
+    Backed by NSE's own official, no-auth MCP server, not the
+    Akamai-affected nseindia.com scrape path the rest of this module uses --
+    a notably more reliable route when it covers the data you need.
+    """
+    server_url = _NSE_MCP_SERVERS.get(server)
+    if server_url is None:
+        raise NSEEndpointError(
+            f"nse_mcp_call: unknown server {server!r}, expected 'bhavcopy' or 'cmmkt'"
+        )
+    return _nse_mcp_call(server_url, tool_name, kwargs)
+
+
+def nse_mcp_list_tools(server=""):
+    """Return NSE's own live tools/list response -- name, description and
+    full inputSchema -- for one MCP server ("bhavcopy" or "cmmkt"), or both
+    (as a dict keyed by server name) when `server` is omitted/empty.
+
+    Always asks the server live rather than returning a hardcoded copy, so
+    this stays accurate if/when NSE changes either server's toolset.
+    """
+    if server:
+        if server not in _NSE_MCP_SERVERS:
+            raise NSEEndpointError(
+                f"nse_mcp_list_tools: unknown server {server!r}, expected 'bhavcopy' or 'cmmkt'"
+            )
+        servers = {server: _NSE_MCP_SERVERS[server]}
+    else:
+        servers = _NSE_MCP_SERVERS
+
+    session = _get_nse_session()
+    out = {}
+    for name, url in servers.items():
+        session_id = _nse_mcp_get_session_id(url)
+        mcp_headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        }
+        if session_id:
+            mcp_headers["Mcp-Session-Id"] = session_id
+        body = {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
+        r = session.post(url, headers=mcp_headers, json=body, timeout=30)
+        if r.status_code != 200:
+            raise NSEEndpointError(f"nse_mcp_list_tools({name}): HTTP {r.status_code}")
+        data = _nse_mcp_parse_response(r)
+        if data.get("error"):
+            raise NSEEndpointError(f"nse_mcp_list_tools({name}): JSON-RPC error: {data['error']}")
+        out[name] = (data.get("result") or {}).get("tools", [])
+
+    return out[server] if server else out
+
+
+def _nse_mcp_records(payload, key):
+    """Return payload[key] (a list of record-dicts) as a DataFrame, or an
+    empty DataFrame if the key is absent -- the same "list field on a dict
+    payload becomes a DataFrame" convention used throughout this file.
+    """
+    rows = payload.get(key) if isinstance(payload, dict) else None
+    return pd.DataFrame(rows if rows else [])
+
+
+# ---------------------------------------------------------------------------
+# Named wrappers -- "bhavcopy" server (nse-bhavcopy-redis-mcp, 21 tools)
+# ---------------------------------------------------------------------------
+
+def nse_mcp_get_top_by_volume(date="today", n=10, sort_by="volume"):
+    """Get the top N most actively traded NSE stocks on a date, sorted by
+    'volume' (traded quantity) or 'value' (turnover in Rs). Backed by NSE's
+    own official no-auth MCP server (bhavcopy)."""
+    payload = nse_mcp_call("bhavcopy", "get_top_by_volume", date=date, n=n, sortBy=sort_by)
+    return _nse_mcp_records(payload, "stocks")
+
+
+def nse_mcp_get_top_movers(date="today", n=10, direction="gain"):
+    """Get the top N gaining ('gain') or losing ('loss') NSE stocks on a
+    date, with OHLCV details. Backed by NSE's own official no-auth MCP
+    server (bhavcopy)."""
+    payload = nse_mcp_call("bhavcopy", "get_top_movers", date=date, n=n, direction=direction)
+    return _nse_mcp_records(payload, "stocks")
+
+
+def nse_mcp_nse_lookup_symbol(query):
+    """Look up NSE ticker symbols by partial name or keyword (ticker list
+    only, no price data). Backed by NSE's own official no-auth MCP server
+    (bhavcopy)."""
+    payload = nse_mcp_call("bhavcopy", "nse_lookup_symbol", query=query)
+    return payload.get("symbols", []) if isinstance(payload, dict) else payload
+
+
+def nse_mcp_get_market_mood(date="today"):
+    """Get a factual read of NSE market mood for a day: India VIX level and
+    trend, index/stock advance-decline breadth, and benchmark changes.
+    Backed by NSE's own official no-auth MCP server (bhavcopy)."""
+    return nse_mcp_call("bhavcopy", "get_market_mood", date=date)
+
+
+def nse_mcp_get_index_valuation(index_name, months=24, date="today"):
+    """Get an NSE index's valuation ratios (P/E, P/B, dividend yield) and
+    where today's value sits within its own recent range. Backed by NSE's
+    own official no-auth MCP server (bhavcopy)."""
+    return nse_mcp_call(
+        "bhavcopy", "get_index_valuation", indexName=index_name, months=months, date=date
+    )
+
+
+def nse_mcp_get_market_breadth(date="today"):
+    """Get overall NSE market breadth for a trading date: advances,
+    declines, unchanged, A/D ratio, total volume. Backed by NSE's own
+    official no-auth MCP server (bhavcopy)."""
+    return nse_mcp_call("bhavcopy", "get_market_breadth", date=date)
+
+
+def nse_mcp_get_corporate_actions(symbol, from_date="", to_date=""):
+    """Fetch actual NSE corporate action events (splits/bonus/dividends/
+    other) for a stock, with exact ex-dates and adjustment factors. Backed
+    by NSE's own official no-auth MCP server (bhavcopy)."""
+    payload = nse_mcp_call(
+        "bhavcopy", "get_corporate_actions", symbol=symbol, fromDate=from_date, toDate=to_date
+    )
+    return _nse_mcp_records(payload, "actions")
+
+
+def nse_mcp_compare_indices(index_names, months=6, date="today"):
+    """Compare 2 to 10 NSE indices side by side: return, annualised
+    volatility, max drawdown and current valuation. Backed by NSE's own
+    official no-auth MCP server (bhavcopy)."""
+    payload = nse_mcp_call(
+        "bhavcopy", "compare_indices", indexNames=index_names, months=months, date=date
+    )
+    return _nse_mcp_records(payload, "indices")
+
+
+def nse_mcp_get_index_movers(date="today", period="1D", n=10, scope="equity"):
+    """Get the top gaining and top losing NSE indices for a day or period
+    (1D/1W/1M/3M/6M/1Y) -- useful for sector/theme rotation. Backed by NSE's
+    own official no-auth MCP server (bhavcopy). Returns the raw dict (both
+    a 'gainers' and a 'losers' list) since the result isn't a single table."""
+    return nse_mcp_call(
+        "bhavcopy", "get_index_movers", date=date, period=period, n=n, scope=scope
+    )
+
+
+def nse_mcp_get_ltp_by_date(symbol, date="today"):
+    """Return the last traded (close) price for an NSE symbol on a date
+    (previous trading day's price if the date is a non-trading day). Backed
+    by NSE's own official no-auth MCP server (bhavcopy)."""
+    return nse_mcp_call("bhavcopy", "get_ltp_by_date", symbol=symbol, date=date)
+
+
+def nse_mcp_get_bulk_quote(symbols):
+    """Get the latest price snapshot (OHLC, prev close, % change, volume)
+    for up to 50 NSE stocks in one call. Backed by NSE's own official
+    no-auth MCP server (bhavcopy)."""
+    payload = nse_mcp_call("bhavcopy", "get_bulk_quote", symbols=symbols)
+    return _nse_mcp_records(payload, "quotes")
+
+
+def nse_mcp_get_volume_analysis(symbol, days=30):
+    """Analyse trading volume trends for an NSE stock over N trading days:
+    average/max/min volume, volume spike days, recent trend. Backed by
+    NSE's own official no-auth MCP server (bhavcopy)."""
+    return nse_mcp_call("bhavcopy", "get_volume_analysis", symbol=symbol, days=days)
+
+
+def nse_mcp_get_stock_history(symbol, months=3, end_date="today"):
+    """Get daily OHLCV price history for an NSE stock (up to 3 months per
+    call; chain calls using the response's next_end_date for longer
+    periods). Backed by NSE's own official no-auth MCP server (bhavcopy)."""
+    payload = nse_mcp_call(
+        "bhavcopy", "get_stock_history", symbol=symbol, months=months, endDate=end_date
+    )
+    return _nse_mcp_records(payload, "data")
+
+
+def nse_mcp_get_index_snapshot(date="today", filter=""):
+    """Get end-of-day values (OHLC, % change, turnover, P/E, P/B, dividend
+    yield) for NSE indices on a date, optionally filtered by a name
+    substring. Backed by NSE's own official no-auth MCP server (bhavcopy)."""
+    payload = nse_mcp_call("bhavcopy", "get_index_snapshot", date=date, filter=filter)
+    return _nse_mcp_records(payload, "indices")
+
+
+def nse_mcp_search_symbols(query):
+    """Search for NSE stock symbols by company name or partial symbol,
+    returning matches with latest close price and % change. Backed by
+    NSE's own official no-auth MCP server (bhavcopy)."""
+    payload = nse_mcp_call("bhavcopy", "search_symbols", query=query)
+    return _nse_mcp_records(payload, "results")
+
+
+def nse_mcp_get_stock_vs_index(symbol, index_name="Nifty 50", months=12, date="today"):
+    """Compare one NSE stock against a benchmark index over a period:
+    return of each, outperformance, beta and correlation (stock return is
+    already corporate-action adjusted). Backed by NSE's own official
+    no-auth MCP server (bhavcopy)."""
+    return nse_mcp_call(
+        "bhavcopy", "get_stock_vs_index",
+        symbol=symbol, indexName=index_name, months=months, date=date,
+    )
+
+
+def nse_mcp_compare_stocks(symbols, months=6):
+    """Compare up to 10 NSE stocks side by side over a period: % return
+    (ranked best to worst) and max drawdown per stock. Backed by NSE's own
+    official no-auth MCP server (bhavcopy)."""
+    payload = nse_mcp_call("bhavcopy", "compare_stocks", symbols=symbols, months=months)
+    return _nse_mcp_records(payload, "stocks")
+
+
+def nse_mcp_get_index_history(index_name, months=3, end_date="today"):
+    """Get daily history (OHLC, % change, turnover, P/E, P/B, dividend
+    yield) for an NSE index, up to 12 months per call; chain calls using
+    next_end_date for longer periods. Backed by NSE's own official no-auth
+    MCP server (bhavcopy)."""
+    payload = nse_mcp_call(
+        "bhavcopy", "get_index_history", indexName=index_name, months=months, endDate=end_date
+    )
+    return _nse_mcp_records(payload, "data")
+
+
+def nse_mcp_moving_average(symbol, days=20):
+    """Calculate the simple moving average (SMA) of close prices for an
+    NSE stock over the last N trading days. Backed by NSE's own official
+    no-auth MCP server (bhavcopy)."""
+    return nse_mcp_call("bhavcopy", "moving_average", symbol=symbol, days=days)
+
+
+def nse_mcp_get_52_week_high_low(symbol):
+    """Get the 52-week high/low for an NSE stock, with dates and the
+    current price's position within that range. Backed by NSE's own
+    official no-auth MCP server (bhavcopy)."""
+    return nse_mcp_call("bhavcopy", "get_52_week_high_low", symbol=symbol)
+
+
+def nse_mcp_get_index_performance(index_name, date="today"):
+    """Get an NSE index's price performance: 1-day change plus 1W/1M/3M/6M/
+    1Y/2Y returns and 52-week high/low with distances. Backed by NSE's own
+    official no-auth MCP server (bhavcopy)."""
+    return nse_mcp_call("bhavcopy", "get_index_performance", indexName=index_name, date=date)
+
+
+# ---------------------------------------------------------------------------
+# Named wrappers -- "cmmkt" server (cm-market-mcp, 15 tools)
+# ---------------------------------------------------------------------------
+
+def nse_mcp_cm_get_live_market_data(index="gainers"):
+    """Get live NSE market data for 'gainers' or 'loosers' (NSE's own
+    spelling), refreshed every 5 minutes. Backed by NSE's own official
+    no-auth MCP server (cmmkt)."""
+    return nse_mcp_call("cmmkt", "cm_get_live_market_data", index=index)
+
+
+def nse_mcp_cm_get_equity_stocks(limit=100, symbol_filter=""):
+    """Get latest live data for NSE Capital Market EQUITY-segment stocks
+    (series EQ/BE/BL/BT/IL/IQ), refreshed every minute. Backed by NSE's own
+    official no-auth MCP server (cmmkt)."""
+    payload = nse_mcp_call(
+        "cmmkt", "cm_get_equity_stocks", limit=limit, symbolFilter=symbol_filter
+    )
+    return _nse_mcp_records(payload, "stocks")
+
+
+def nse_mcp_nse_get_losers(limit=10):
+    """Get the top N NSE stocks by % loss, flattened across all indices and
+    sorted ascending. Backed by NSE's own official no-auth MCP server
+    (cmmkt). NOTE: as of this writing NSE's own server has a live bug on
+    this specific tool (confirmed: an internal "ArrayList cannot be cast to
+    Map" exception) -- this raises NSEEndpointError until NSE fixes it; use
+    nse_mcp_nse_get_market_movers() for the same ranking in the meantime."""
+    payload = nse_mcp_call("cmmkt", "nse_get_losers", limit=limit)
+    return _nse_mcp_records(payload, "losers") if isinstance(payload, dict) else payload
+
+
+def nse_mcp_cm_get_call_auction_stocks(limit=100, symbol_filter=""):
+    """Get latest live data for NSE Call Auction session stocks (series
+    CA/CB), refreshed every minute. Backed by NSE's own official no-auth
+    MCP server (cmmkt)."""
+    payload = nse_mcp_call(
+        "cmmkt", "cm_get_call_auction_stocks", limit=limit, symbolFilter=symbol_filter
+    )
+    return _nse_mcp_records(payload, "stocks")
+
+
+def nse_mcp_cm_get_bond_stocks(limit=100, symbol_filter=""):
+    """Get latest live data for NSE BONDS/debt instrument series, refreshed
+    every minute. Backed by NSE's own official no-auth MCP server (cmmkt)."""
+    payload = nse_mcp_call(
+        "cmmkt", "cm_get_bond_stocks", limit=limit, symbolFilter=symbol_filter
+    )
+    return _nse_mcp_records(payload, "stocks")
+
+
+def nse_mcp_cm_get_live_gainers():
+    """Return raw NSE gainers data grouped by index segment (NIFTY,
+    BANKNIFTY, NIFTYNEXT50, allSec, etc.) -- not sorted by % change; use
+    nse_mcp_nse_get_market_movers() for a sorted ranking instead. Backed by
+    NSE's own official no-auth MCP server (cmmkt)."""
+    return nse_mcp_call("cmmkt", "cm_get_live_gainers")
+
+
+def nse_mcp_nse_get_gainers(limit=10):
+    """Get the top N NSE stocks by % gain, flattened across all indices and
+    sorted descending. Backed by NSE's own official no-auth MCP server
+    (cmmkt). NOTE: as of this writing NSE's own server has a live bug on
+    this specific tool (confirmed: an internal "ArrayList cannot be cast to
+    Map" exception) -- this raises NSEEndpointError until NSE fixes it; use
+    nse_mcp_nse_get_market_movers() for the same ranking in the meantime."""
+    payload = nse_mcp_call("cmmkt", "nse_get_gainers", limit=limit)
+    return _nse_mcp_records(payload, "gainers") if isinstance(payload, dict) else payload
+
+
+def nse_mcp_cm_get_data_status():
+    """Check freshness of NSE live gainers/losers market data (last crawl
+    time, crawl interval, Redis TTL). Backed by NSE's own official no-auth
+    MCP server (cmmkt)."""
+    return nse_mcp_call("cmmkt", "cm_get_data_status")
+
+
+def nse_mcp_cm_get_stock_quote(symbol):
+    """Get the latest live quote for one NSE CM stock by exact symbol
+    (works for equity, SME, bond or call-auction segments). Backed by
+    NSE's own official no-auth MCP server (cmmkt)."""
+    return nse_mcp_call("cmmkt", "cm_get_stock_quote", symbol=symbol)
+
+
+def nse_mcp_cm_get_index_quote(index_name):
+    """Get the full live quote for one NSE index by exact name: last
+    value, change, day's OHLC, 52-week range, and 1W/1M/1Y comparisons.
+    Backed by NSE's own official no-auth MCP server (cmmkt)."""
+    return nse_mcp_call("cmmkt", "cm_get_index_quote", indexName=index_name)
+
+
+def nse_mcp_cm_get_sme_stocks(limit=100, symbol_filter=""):
+    """Get latest live data for NSE SME (Small & Medium Enterprises) stocks
+    (series SM/ST), refreshed every minute. Backed by NSE's own official
+    no-auth MCP server (cmmkt)."""
+    payload = nse_mcp_call(
+        "cmmkt", "cm_get_sme_stocks", limit=limit, symbolFilter=symbol_filter
+    )
+    return _nse_mcp_records(payload, "stocks")
+
+
+def nse_mcp_cm_get_live_losers():
+    """Return raw NSE losers data grouped by index segment (NIFTY,
+    BANKNIFTY, NIFTYNEXT50, allSec, etc.) -- not sorted by % change; use
+    nse_mcp_nse_get_market_movers() for a sorted ranking instead. Backed by
+    NSE's own official no-auth MCP server (cmmkt)."""
+    return nse_mcp_call("cmmkt", "cm_get_live_losers")
+
+
+def nse_mcp_cm_get_live_indices(group="", name_filter=""):
+    """Get the latest live values of NSE indices (last, previous close,
+    change, day's OHLC) across six groups (derivatives/broad/sectoral/
+    strategy/thematic/fixed_income), optionally filtered by group and/or a
+    name substring. Backed by NSE's own official no-auth MCP server
+    (cmmkt)."""
+    return nse_mcp_call("cmmkt", "cm_get_live_indices", group=group, nameFilter=name_filter)
+
+
+def nse_mcp_nse_get_market_movers(index_name=None, limit=10):
+    """Get the top N gainers and top N losers (sorted) from all NSE
+    securities, or filtered to one of NIFTY/BANKNIFTY/NIFTYNEXT50. The
+    PRIMARY tool for "top gainers/losers today" style questions. Backed by
+    NSE's own official no-auth MCP server (cmmkt). Returns the raw dict
+    (both a 'gainers' and a 'losers' list) since the result isn't a single
+    table."""
+    return nse_mcp_call(
+        "cmmkt", "nse_get_market_movers", indexName=index_name or "", limit=limit
+    )
+
+
+def nse_mcp_cm_get_allstocks_status():
+    """Check freshness of NSE's all-stocks live data cache: last crawl
+    time, availability, and segment-wise stock counts. Backed by NSE's own
+    official no-auth MCP server (cmmkt)."""
+    return nse_mcp_call("cmmkt", "cm_get_allstocks_status")
