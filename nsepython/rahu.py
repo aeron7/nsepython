@@ -597,24 +597,56 @@ def nse_quote(symbol,section=""):
             f"run/populated yet."
         )
 
-    # Round 3: every other section value (e.g. the old 'metadata'/
-    # 'industryInfo'/'info'/'priceInfo'/'securityInfo') used to fall through
+    # v2.101 fix: the Round-3 rationale above ("NSE's old API never accepted
+    # these section values") is true but beside the point -- this isn't
+    # about replicating the old query parameter, it's about reconstructing
+    # the equivalent DATA from the new no-section payload, exactly as the
+    # 'trade_info' branch above already does. nsepythonserver already does
+    # this for the remaining old quote-equity top-level keys (info/metadata/
+    # priceInfo/securityInfo/industryInfo); port that here too. Every one of
+    # these is a pure re-slice of the same GetQuoteApi?functionName=
+    # getSymbolData payload nse_quote(symbol, section="") already fetches --
+    # no new network call. 'preOpenMarket' is deliberately NOT included in
+    # this set: the branch above already serves it from a genuinely live,
+    # higher-fidelity endpoint (/api/market-data-pre-open) rather than this
+    # reshape's coarser approximation.
+    _equity_detail_sections = {
+        "info", "metadata", "priceInfo", "securityInfo", "industryInfo",
+    }
+    if section in _equity_detail_sections:
+        base_payload = nse_quote(symbol, section="")
+        if 'equityResponse' not in base_payload or not base_payload['equityResponse']:
+            # Index/derivative symbols have no cash-market EquityDetails
+            # shape to slice a section out of.
+            raise NSEEndpointError(
+                f"nse_quote({symbol!r}, section={section!r}): no equity "
+                f"'section' data exists for index/derivative symbols -- use "
+                f"nse_quote_derivatives(symbol) or nse_quote(symbol) (no "
+                f"section) instead."
+            )
+        if section == "industryInfo":
+            sec_info = base_payload['equityResponse'][0].get('secInfo', {}) or {}
+            return {
+                "macro": sec_info.get("macro"),
+                "sector": sec_info.get("sector"),
+                "industry": sec_info.get("industryInfo"),
+                "basicIndustry": sec_info.get("basicIndustry"),
+            }
+        reshaped = _reshape_equity_quote(base_payload)
+        return reshaped.get(section, {})
+
+    # Round 3: every other section value used to fall through
     # here and hit the dead /api/quote-equity&section=X route -- a ~5s
     # double-retry ending in a misleading HTTP 403, for a route that was
-    # never real in the first place. Checked against unofficed.com's own
-    # docs, the hi-imcodeman/stock-nse-india reference implementation, and
-    # this project's full GitHub issue history: NSE's API never accepted
-    # any section value beyond 'trade_info' -- those other names are just
-    # top-level keys inside the un-sectioned response, already returned in
-    # full by nse_quote(symbol) (section=""). Raise immediately and clearly
-    # instead of a slow, confusing network round-trip to a route that was
-    # never real.
+    # never real in the first place. Raise immediately and clearly instead
+    # of a slow, confusing network round-trip to a route that was never
+    # real.
     raise ValueError(
-        f"nse_quote: unsupported section={section!r}; only '' (full quote), "
-        f"'trade_info', and 'preOpenMarket' are supported -- NSE's old "
-        f"quote-equity API never had other section values. section='' "
-        f"already returns the full detail (metaData/secInfo/priceInfo/"
-        f"orderBook/tradeInfo all together)."
+        f"nse_quote: unsupported section={section!r}; supported: '' (full "
+        f"quote), 'trade_info', 'preOpenMarket', and "
+        f"{sorted(_equity_detail_sections)}. section='' already returns the "
+        f"full detail (metaData/secInfo/priceInfo/orderBook/tradeInfo all "
+        f"together)."
     )
 def nse_expirydetails(payload, i=0, symbol=None):
     expiry_dates = []
@@ -1091,6 +1123,63 @@ def nse_optionchain_ltp(payload,strikePrice,optionType,inp=0,intent=""):
         "directly."
     )
 
+def _reshape_equity_quote(raw):
+    """/api/quote-equity (nse_eq's old data source) is dead (confirmed live
+    403 Access Denied, Apache/WAF-style, not an Akamai JS challenge -- there
+    is no cookie that fixes it). The live quote page itself now calls
+    GetQuoteApi?functionName=getSymbolData instead, which carries nearly all
+    the same information, just regrouped. We reshape it back into the old
+    quote-equity top-level key names (info/metadata/priceInfo/securityInfo/
+    tradeInfo) as closely as the new payload allows, so code written against
+    the old shape (payload['priceInfo']['lastPrice'],
+    payload['metadata']['pdSymbolPe'], etc.) keeps working. The full
+    unmodified NextApi response is also kept under '_raw' for anyone who
+    wants the new field names directly. Ported from nsepythonserver's
+    identical helper (same live-verified field mapping)."""
+    if not raw or 'equityResponse' not in raw or not raw['equityResponse']:
+        return raw
+    row = raw['equityResponse'][0]
+    meta = row.get('metaData', {}) or {}
+    sec = row.get('secInfo', {}) or {}
+    trade = row.get('tradeInfo', {}) or {}
+    price = row.get('priceInfo', {}) or {}
+    order = row.get('orderBook', {}) or {}
+
+    reshaped = {
+        'info': {
+            'symbol': meta.get('symbol'),
+            'companyName': meta.get('companyName'),
+            'industry': sec.get('basicIndustry'),
+            'isin': meta.get('isinCode'),
+            'series': meta.get('series'),
+        },
+        'metadata': {
+            **meta,
+            'pdSectorPe': sec.get('pdSectorPe'),
+            'pdSymbolPe': sec.get('pdSymbolPe'),
+            'pdSectorInd': sec.get('pdSectorInd'),
+        },
+        'priceInfo': {
+            'lastPrice': order.get('lastPrice', meta.get('closePrice')),
+            'change': meta.get('change'),
+            'pChange': meta.get('pChange'),
+            'previousClose': meta.get('previousClose'),
+            'open': meta.get('open'),
+            'close': meta.get('closePrice'),
+            'vwap': meta.get('averagePrice'),
+            'intraDayHighLow': {'min': meta.get('dayLow'), 'max': meta.get('dayHigh'),
+                                 'value': order.get('lastPrice', meta.get('closePrice'))},
+            'weekHighLow': {'min': price.get('yearLow'), 'max': price.get('yearHigh'),
+                             'minDate': price.get('yearLowDt'), 'maxDate': price.get('yearHightDt')},
+        },
+        'securityInfo': sec,
+        'tradeInfo': trade,
+        'preOpenMarket': {},
+        '_raw': raw,
+    }
+    return reshaped
+
+
 def nse_eq(symbol):
     symbol = nsesymbolpurify(symbol)
     try:
@@ -1108,13 +1197,21 @@ def nse_eq(symbol):
         # same underlying data (just in a different JSON shape - data lives
         # under payload['equityResponse'][0] instead of payload['priceInfo']/
         # payload['info']) so we fall back to that instead of returning {}.
+        #
+        # v2.101 fix: the fallback used to return that raw NextApi payload
+        # unreshaped, so old bracket-access code (payload['priceInfo']
+        # ['lastPrice'], payload['metadata']['pdSectorPe'], etc. -- the exact
+        # examples long documented on unofficed.com's Basic Functions page)
+        # raised KeyError instead of working, a real regression introduced
+        # by this same Akamai fallback. nsepythonserver already carried this
+        # reshape; port it here too via _reshape_equity_quote() above.
         logging.warning(
             "nse_eq(%s): /api/quote-equity is retired; returning data from "
             "the newer NextApi quote endpoint instead (see nse_quote() - the "
             "JSON shape differs from the old quote-equity response).",
             symbol,
         )
-        payload = nse_quote(symbol)
+        payload = _reshape_equity_quote(nse_quote(symbol))
     return payload
 
 
@@ -1140,6 +1237,16 @@ def nse_fno(symbol):
             symbol,
         )
         payload = nse_quote_derivatives(symbol)
+    # v2.101 fix: the old quote-derivative response carried 'underlyingValue'
+    # at the top level; the new flat getSymbolDerivativesData shape instead
+    # repeats it inside EVERY entry of payload['data'] (same value on each),
+    # so payload['underlyingValue'] (a documented, long-standing access
+    # pattern) now raises KeyError. Promote it back to the top level from
+    # the first entry without touching/removing the existing 'data' key.
+    if 'underlyingValue' not in payload and payload.get('data'):
+        first = payload['data'][0]
+        if isinstance(first, dict) and 'underlyingValue' in first:
+            payload['underlyingValue'] = first['underlyingValue']
     return payload
 
 def quote_equity(symbol):
@@ -2134,7 +2241,7 @@ _NSE_MCP_SERVERS = {
     "cmmkt": "https://mcp.nseindia.in/cmmkt/mcp",
 }
 
-_NSE_MCP_CLIENT_VERSION = "2.98"
+_NSE_MCP_CLIENT_VERSION = "2.101"
 
 # Lightweight session-id cache, keyed by server URL, so repeated calls to the
 # same MCP server don't re-run the "initialize" handshake every time.
