@@ -1773,6 +1773,39 @@ def share_holding(symbol):
     return df
 
 
+def nse_annual_reports(symbol, year_from=None, year_to=None, index="equities"):
+    """Forum feature request (forum.unofficed.com topic 1459): list a listed
+    company's annual reports with direct PDF download links, optionally
+    filtered to a from/to year range. Backed by
+    `/api/annual-reports?index=equities&symbol=X`, confirmed live via
+    curl_cffi -- NOT the Akamai-walled historical/* family, just a plain
+    metadata+link listing, so this is reliable. `index` is almost always
+    "equities" (NSE also recognises "debt", but that returns no rows for a
+    pure-equity symbol like most NSE-listed companies). Each returned row's
+    `fileName` column IS the direct downloadable PDF/zip URL on
+    nsearchives.nseindia.com -- fetch it yourself (e.g. with `requests` or
+    `curl`) if you want the actual file; this function returns the metadata
+    + link, matching how every other *_history-style function in this
+    library works, rather than silently downloading files to disk.
+    `year_from`/`year_to` filter client-side on the report's `fromYr` (NSE's
+    own API has no year-range parameter, it always returns the full
+    available history -- commonly 15-20+ years for large-cap companies)."""
+    symbol = nsesymbolpurify(symbol)
+    payload = nsefetch(f"https://www.nseindia.com/api/annual-reports?index={index}&symbol={symbol}")
+    rows = payload.get("data") or []
+    df = pd.DataFrame.from_records(rows)
+    if df.empty:
+        return df
+    if year_from is not None or year_to is not None:
+        years = pd.to_numeric(df["fromYr"], errors="coerce")
+        if year_from is not None:
+            df = df[years >= int(year_from)]
+            years = years[df.index]
+        if year_to is not None:
+            df = df[years <= int(year_to)]
+    return df.reset_index(drop=True)
+
+
 #Request from subhash
 ## https://unofficed.com/how-to-find-the-beta-of-indian-stocks-using-python/
 def get_beta_df_maker(symbol,days):
